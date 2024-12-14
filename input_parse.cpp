@@ -89,11 +89,14 @@ static std::unordered_map<std::string, std::stringstream> read_input(int argc, c
 {
 	if(argc >= 2) //input file
 	{
+#ifdef DEBUG
+		std::cout << "debug: opening file: " << argv[1] << '\n';
+#endif
 		std::ifstream file(argv[1]);
 		if (!file.is_open()) {
 			std::cerr << "Error opening file: " << argv[1] << '\n';
 			if (file.bad()) {
-				std::cerr << "Fatal error: badbit is set.\n";
+				std::cerr << "badbit is set.\n";
 			}
 			if (file.fail()) {
 				std::cerr << std::strerror(errno) << '\n';
@@ -103,6 +106,9 @@ static std::unordered_map<std::string, std::stringstream> read_input(int argc, c
 		return read_stream(file);
 	}else //stdin
 	{
+#ifdef DEBUG
+		std::cout << "debug: using stdin\n";
+#endif
 		return read_stream(std::cin);
 	}
 }
