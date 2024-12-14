@@ -73,9 +73,9 @@ static std::unordered_map<std::string, std::stringstream> read_input(int argc, c
 {
 	if(argc >= 2) //input file
 	{
-		std::ifstream file(argv[2]);
+		std::ifstream file(argv[1]);
 		if (!file.is_open()) {
-			std::cerr << "Error opening file: " << argv[2] << '\n';
+			std::cerr << "Error opening file: " << argv[1] << '\n';
 			if (file.bad()) {
 				std::cerr << "Fatal error: badbit is set.\n";
 			}

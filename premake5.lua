@@ -15,3 +15,5 @@ project "rec"
 	filter "configurations:release"
 		defines { "NDEBUG" }
 		optimize "On"
+	filter { "system:linux", "action:gmake2" }
+		buildoptions {"-Wnrvo"}
