@@ -33,7 +33,7 @@ static std::unordered_map<std::string, std::stringstream> read_stream(std::istre
 		check_stream_should_close(is);
 		std::exit(1);
 	}
-	while(!is.eof())
+	for(unsigned int lineno = 1; !is.eof(); lineno++)
 	{
 		//iterate over lines of input
 		std::string line;
@@ -46,13 +46,26 @@ static std::unordered_map<std::string, std::stringstream> read_stream(std::istre
 		}
 		std::stringstream liness(line);
 		check_sstream_fail(liness, is);
+		if(liness.eof())
+		{
+			std::cerr << "error: empty line " << lineno << '\n';
+			check_stream_should_close(is);
+			std::exit(1);
+		}
 		
 		//get token name
 		std::string name;
 		liness >> name; //the first string is the token name
 		auto [it, first] = ret.try_emplace(std::move(name), std::stringstream());
-		
 		std::stringstream& rss = it->second;
+		
+		if(liness.eof())
+		{
+			std::cerr << "error: no regex on line " << lineno << " for token '";
+			std::cerr << it->first << "'\n";
+			check_stream_should_close(is);
+			std::exit(1);
+		}
 		while (!liness.eof()) //read all regex strings on this line
 		{
 			std::string rstr;
@@ -65,6 +78,9 @@ static std::unordered_map<std::string, std::stringstream> read_stream(std::istre
 			first=false;
 			rss << rstr;
 		}
+#ifdef DEBUG
+		std::cout << "debug: token '" << it->first << "':" << rss.str() << '\n';
+#endif
 	}
 	return ret;
 }
