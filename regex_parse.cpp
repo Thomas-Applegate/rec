@@ -14,9 +14,12 @@ S  -> G S' $
 S' -> pipe S | eps
 G  -> U O G | eps
 U  -> ch | . | ( S ) | A
-O -> * | + | ? | eps
+O -> * | + | ? | { I N } | eps
 A  -> [ ch - ch A' ]
 A' -> ch - ch A' | eps
+I -> digit I'
+I' -> digit I' | eps
+N -> - I | + | eps
 */
 
 Regex_Parse::Regex_Parse(std::stringstream& sstream) {
