@@ -1,16 +1,7 @@
-#include <iostream>
-#include <fstream>
-#include <string>
+#include "input_parse.h"
 
 int main(int argc, const char** argv)
 {
-	if(argc >= 2)
-	{
-		
-	}else
-	{
-		
-	}
-	
+	std::unordered_map<std::string, Dfa> dfa_map = parse_input(argc, argv);
 	return 0;
 }
