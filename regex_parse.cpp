@@ -9,4 +9,16 @@ Regex_Exception& Regex_Exception::operator=(const Regex_Exception& oth) noexcept
 }
 const char* Regex_Exception::what() const noexcept { return m_what; }
 
-Regex_Parse::Regex_Parse(std::stringstream& sstream) {}
+/* regex cfg
+S  -> G S' $
+S' -> pipe S | eps
+G  -> U O G | eps
+U  -> ch | . | ( S ) | A
+O -> * | + | ? | eps
+A  -> [ ch - ch A' ]
+A' -> ch - ch A' | eps
+*/
+
+Regex_Parse::Regex_Parse(std::stringstream& sstream) {
+	throw Regex_Exception("Regex parsing not yet implemented");
+}
