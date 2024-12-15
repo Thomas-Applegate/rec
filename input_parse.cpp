@@ -1,5 +1,4 @@
 #include "input_parse.h"
-#include "regex_parse.h"
 #include "utils.h"
 
 #include <iostream>
@@ -113,10 +112,10 @@ static std::unordered_map<std::string, std::stringstream> read_input(int argc, c
 	}
 }
 
-static std::unordered_map<std::string, Regex_Parse> parse_regexes(int argc, const char** argv)
+static std::unordered_map<std::string, Nfa> parse_regexes(int argc, const char** argv)
 {
 	std::unordered_map<std::string, std::stringstream> ss_map = read_input(argc, argv);
-	std::unordered_map<std::string, Regex_Parse> ret(ss_map.bucket_count());
+	std::unordered_map<std::string, Nfa> ret(ss_map.bucket_count());
 	for(auto it = ss_map.begin(); it != ss_map.end(); it = ss_map.erase(it))
 	{
 		auto& [k,v] = *it;
@@ -135,6 +134,5 @@ static std::unordered_map<std::string, Regex_Parse> parse_regexes(int argc, cons
 
 std::unordered_map<std::string, Dfa> parse_input(int argc, const char** argv)
 {
-	std::unordered_map<std::string, Nfa> nfa_map = convert_map_to<Nfa>(parse_regexes(argc, argv));
-	return convert_map_to<Dfa>(nfa_map);
+	return convert_map_to<Dfa>(parse_regexes(argc, argv));
 }
