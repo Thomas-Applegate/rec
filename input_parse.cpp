@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <exception>
+#include <string>
 #include <cstring>
 
 static inline void check_stream_should_close(std::istream& is)
@@ -23,9 +24,9 @@ static inline void check_sstream_fail(std::stringstream& ss, std::istream& is)
 	}
 }
 
-static std::unordered_map<std::string, std::stringstream> read_stream(std::istream& is)
+static std::unordered_map<std::string, std::string> read_stream(std::istream& is)
 {
-	std::unordered_map<std::string, std::stringstream> ret;
+	std::unordered_map<std::string, std::string> ret;
 	if(is.eof())
 	{
 		std::cerr << "the input is empty\n";
@@ -55,8 +56,8 @@ static std::unordered_map<std::string, std::stringstream> read_stream(std::istre
 		//get token name
 		std::string name;
 		liness >> name; //the first string is the token name
-		auto [it, first] = ret.try_emplace(std::move(name), std::stringstream());
-		std::stringstream& rss = it->second;
+		auto [it, first] = ret.try_emplace(std::move(name));
+		std::string& rs = it->second;
 		
 		if(liness.eof())
 		{
@@ -72,19 +73,19 @@ static std::unordered_map<std::string, std::stringstream> read_stream(std::istre
 			check_sstream_fail(liness, is);
 			if(!first)
 			{
-				rss << '|'; //alternation with previous regex
+				rs.push_back('|'); //alternation with previous regex
 			}
 			first=false;
-			rss << rstr;
+			rs.append(rstr);
 		}
 #ifdef DEBUG
-		std::cout << "debug: token '" << it->first << "':" << rss.str() << '\n';
+		std::cout << "debug: token '" << it->first << "':" << rs << '\n';
 #endif
 	}
 	return ret;
 }
 
-static std::unordered_map<std::string, std::stringstream> read_input(int argc, const char** argv)
+static std::unordered_map<std::string, std::string> read_input(int argc, const char** argv)
 {
 	if(argc >= 2) //input file
 	{
@@ -114,13 +115,16 @@ static std::unordered_map<std::string, std::stringstream> read_input(int argc, c
 
 static std::unordered_map<std::string, Nfa> parse_regexes(int argc, const char** argv)
 {
-	std::unordered_map<std::string, std::stringstream> ss_map = read_input(argc, argv);
-	std::unordered_map<std::string, Nfa> ret(ss_map.bucket_count());
-	for(auto it = ss_map.begin(); it != ss_map.end(); it = ss_map.erase(it))
+	std::unordered_map<std::string, std::string> s_map = read_input(argc, argv);
+	std::unordered_map<std::string, Nfa> ret(s_map.bucket_count());
+	for(auto it = s_map.begin(); it != s_map.end(); it = s_map.erase(it))
 	{
-		auto& [k,v] = *it;
+		const auto& [k,v] = *it;
 		try
 		{
+#ifdef DEBUG
+			std::cout << "debug: constructing Nfa for token '" << k << "'\n";
+#endif
 			ret.emplace(k, v);
 		}catch(const std::exception& e)
 		{

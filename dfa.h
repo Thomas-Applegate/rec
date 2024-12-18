@@ -1,6 +1,6 @@
 #pragma once
 
-#include <sstream>
+#include <string>
 #include <exception>
 
 class Regex_Exception : public std::exception
@@ -18,15 +18,13 @@ private:
 class Nfa
 {
 public:
-	Nfa() noexcept = default;
-	Nfa(std::stringstream& regex);
+	Nfa(const std::string& regex);
 private:	
 };
 
 class Dfa
 {
 public:
-	Dfa() noexcept = default;
 	Dfa(const Nfa& nfa);
 private:
 };

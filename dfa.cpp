@@ -22,5 +22,5 @@ I' -> digit I' | eps
 N -> - I | + | eps
 */
 
-Nfa::Nfa(std::stringstream& regex) {}
+Nfa::Nfa(const std::string& regex) {}
 Dfa::Dfa(const Nfa& nfa) {}
