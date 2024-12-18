@@ -16,12 +16,14 @@ static unsigned int lex_number(const char*& str)
 	unsigned int number = 0;
 	char ch = *str++;
 	if(!(ch >= '0' && ch <= '9')) throw Regex_Exception("failed to read number expected digit");
-	while(ch >= '0' && ch <= '9')
+	do
 	{
 		number *= 10;
 		number += static_cast<unsigned int>(ch-'0');
 		ch = *str++;
-	}
+	}while(ch >= '0' && ch <= '9');
+	if(ch == 0) throw Regex_Exception("encountered end of string too early");
+	str--;
 	return number;
 }
 
@@ -55,6 +57,7 @@ static char lex_hex(const char*& str)
 		case 'E': ret += 14; break;
 		case 'f':
 		case 'F': ret += 15; break;
+		case 0: throw Regex_Exception("encountered end of string too early");
 		}
 	}
 	return ret;
@@ -93,6 +96,7 @@ size_t Nfa::parse_element(const char*& str, size_t in_state)
 		do
 		{
 			char min = *str++;
+			if(min == 0) throw Regex_Exception("encountered end of string too early");
 			if(*str++ != '-') throw Regex_Exception("'-' required in character range");
 			char max = *str++;
 			if(max < min) std::swap(min, max);
@@ -173,8 +177,8 @@ size_t Nfa::parse_chunk(const char*& str, size_t in_state)
 	size_t working_state = in_state;
 	while(true)
 	{
-		const char* save_ptr = str;
-		if(char ch = *str; ch == '|' || ch == 0) return working_state;
+		const char* loc = str;
+		if(char ch = *str; ch == '|' || ch == ')' || ch == 0) return working_state;
 		size_t next_state = parse_element(str, working_state);
 		switch(*str++) //parse operator
 		{
@@ -189,14 +193,17 @@ size_t Nfa::parse_chunk(const char*& str, size_t in_state)
 		case '{':
 		{
 			unsigned int min = lex_number(str);
-			for(unsigned int i = 0; i < min; i++)
+			for(unsigned int i = 1; i < min; i++)
 			{
+				const char* save_ptr = loc;
 				working_state = next_state;
 				next_state = parse_element(save_ptr, working_state);
 			}
 			switch(*str++)
 			{
-			case '}': break;
+			case '}':
+				if(min == 0) throw Regex_Exception("invalid {} expression");
+				break;
 			case '+': //min or more of the element
 				m_states[next_state].epsilon_transitions.emplace(working_state);
 				if(*str++ != '}') throw Regex_Exception("expected } to close {");
@@ -209,6 +216,7 @@ size_t Nfa::parse_chunk(const char*& str, size_t in_state)
 				size_t end_state = emplace_new_state();
 				for(unsigned int i = 0; i < max; i++)
 				{
+					const char* save_ptr = loc;
 					working_state = next_state;
 					m_states[working_state].epsilon_transitions.emplace(end_state);
 					next_state = parse_element(save_ptr, working_state);
@@ -220,8 +228,9 @@ size_t Nfa::parse_chunk(const char*& str, size_t in_state)
 			}
 			default: throw Regex_Exception("unexpected character in {} expression");
 			}
+			break;
 		}
-		default: break;
+		default: str--; break;
 		}
 		working_state = next_state;
 	}
@@ -235,6 +244,7 @@ size_t Nfa::parse_regex(const char*& str, size_t in_state)
 		size_t chunk_out = parse_chunk(str, in_state);
 		m_states[chunk_out].epsilon_transitions.emplace(out_state);
 	}while(*str++ == '|');
+	str--;
 	return out_state;
 }
 
