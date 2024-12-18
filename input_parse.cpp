@@ -134,7 +134,11 @@ static std::unordered_map<std::string, Nfa> parse_regexes(int argc, const char**
 std::unordered_map<std::string, Dfa> parse_input(int argc, const char** argv)
 {
 	std::unordered_map<std::string, Nfa> nfa_map = parse_regexes(argc, argv);
-	auto begin = std::make_move_iterator(nfa_map.begin());
-	auto end = std::make_move_iterator(nfa_map.end());
-	return std::unordered_map<std::string, Dfa>(begin, end, nfa_map.bucket_count());
+	std::unordered_map<std::string, Dfa> ret(nfa_map.bucket_count());
+	for(auto it = nfa_map.begin(); it != nfa_map.end(); it = nfa_map.erase(it))
+	{
+		const auto& [k,v] = *it;
+		ret.emplace(std::move(k), std::move(v));
+	}
+	return ret;
 }
