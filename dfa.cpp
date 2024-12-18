@@ -23,4 +23,11 @@ N -> - I | + | eps
 */
 
 Nfa::Nfa(const std::string& regex) {}
+
+Nfa::operator const std::vector<Nfa::state>&() const noexcept { return m_states; }
+const std::vector<Nfa::state>& Nfa::states() const noexcept { return m_states; }
+
 Dfa::Dfa(const Nfa& nfa) {}
+
+Dfa::operator const std::vector<Dfa::state>&() const noexcept { return m_states; }
+const std::vector<Dfa::state>& Dfa::states() const noexcept { return m_states; }
