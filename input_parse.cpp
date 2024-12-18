@@ -14,11 +14,11 @@ static inline void check_stream_should_close(std::istream& is)
 	if(fp != nullptr) fp->close();
 }
 
-static inline void check_sstream_fail(std::stringstream& ss, std::istream& is)
+static inline void check_sstream_fail(std::stringstream& ss, std::istream& is, unsigned int lineno)
 {
 	if(ss.fail() || ss.bad())
 	{
-		std::cerr << "an error occured reading from the input\n";
+		std::cerr << "error: stringstream error wile reading input at line " << lineno << '\n';
 		check_stream_should_close(is);
 		std::exit(1);
 	}
@@ -29,7 +29,7 @@ static std::unordered_map<std::string, std::string> read_stream(std::istream& is
 	std::unordered_map<std::string, std::string> ret;
 	if(is.eof())
 	{
-		std::cerr << "the input is empty\n";
+		std::cerr << "error: the input is empty\n";
 		check_stream_should_close(is);
 		std::exit(1);
 	}
@@ -38,20 +38,15 @@ static std::unordered_map<std::string, std::string> read_stream(std::istream& is
 		//iterate over lines of input
 		std::string line;
 		std::getline(is, line);
-		if(is.fail())
+		if(line.empty()) continue; //skip empty line
+		else if(is.fail())
 		{
-			std::cerr << "an error occured reading from the input\n";
+			std::cerr << "error: failed to read from the input at line " << lineno << '\n';
 			check_stream_should_close(is);
 			std::exit(1);
 		}
 		std::stringstream liness(line);
-		check_sstream_fail(liness, is);
-		if(liness.eof())
-		{
-			std::cerr << "error: empty line " << lineno << '\n';
-			check_stream_should_close(is);
-			std::exit(1);
-		}
+		check_sstream_fail(liness, is, lineno);
 		
 		//get token name
 		std::string name;
@@ -70,7 +65,7 @@ static std::unordered_map<std::string, std::string> read_stream(std::istream& is
 		{
 			std::string rstr;
 			liness >> rstr;
-			check_sstream_fail(liness, is);
+			check_sstream_fail(liness, is, lineno);
 			if(!first)
 			{
 				rs.push_back('|'); //alternation with previous regex
@@ -94,7 +89,7 @@ static std::unordered_map<std::string, std::string> read_input(int argc, const c
 #endif
 		std::ifstream file(argv[1]);
 		if (!file.is_open()) {
-			std::cerr << "Error opening file: " << argv[1] << '\n';
+			std::cerr << "error: could not open file: " << argv[1] << '\n';
 			if (file.bad()) {
 				std::cerr << "badbit is set.\n";
 			}
