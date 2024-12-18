@@ -1,5 +1,4 @@
 #include "input_parse.h"
-#include "utils.h"
 
 #include <iostream>
 #include <fstream>
@@ -7,6 +6,7 @@
 #include <exception>
 #include <string>
 #include <cstring>
+#include <iterator>
 
 static inline void check_stream_should_close(std::istream& is)
 {
@@ -138,5 +138,8 @@ static std::unordered_map<std::string, Nfa> parse_regexes(int argc, const char**
 
 std::unordered_map<std::string, Dfa> parse_input(int argc, const char** argv)
 {
-	return convert_map_to<Dfa>(parse_regexes(argc, argv));
+	std::unordered_map<std::string, Nfa> nfa_map = parse_regexes(argc, argv);
+	auto begin = std::make_move_iterator(nfa_map.begin());
+	auto end = std::make_move_iterator(nfa_map.end());
+	return std::unordered_map<std::string, Dfa>(begin, end, nfa_map.bucket_count());
 }
