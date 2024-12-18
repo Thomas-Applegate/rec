@@ -123,7 +123,7 @@ static std::unordered_map<std::string, Nfa> parse_regexes(int argc, const char**
 			ret.emplace(k, v);
 		}catch(const std::exception& e)
 		{
-			std::cerr << "Failed to parse regex. Exception thrown for token '" << k;
+			std::cerr << "error: failed to parse regex: exception thrown for token '" << k;
 			std::cerr << "':" << e.what() << '\n';
 			std::exit(2);
 		}
