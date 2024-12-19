@@ -2,7 +2,7 @@
 
 #include <string>
 #include <exception>
-#include <optional>
+#include <variant>
 #include <map>
 #include <set>
 #include <vector>
@@ -59,8 +59,7 @@ public:
 	struct state
 	{
 		bool is_accepting;
-		std::optional<size_t> omega_transition; //any charachter transition
-		std::map<char, size_t> ch_transitions;
+		std::variant<size_t, std::map<char, size_t>> transitions;
 	};
 
 	Dfa(const Nfa& nfa);
