@@ -214,11 +214,11 @@ size_t Nfa::parse_chunk(const char*& str, size_t in_state)
 				if(max < min) throw Regex_Exception("max is less than min in {} expression");
 				if(max == min) break;
 				size_t end_state = emplace_new_state();
-				for(unsigned int i = 0; i < max; i++)
+				for(unsigned int i = min; i < max; i++)
 				{
 					const char* save_ptr = loc;
-					working_state = next_state;
 					m_states[working_state].epsilon_transitions.emplace(end_state);
+					working_state = next_state;
 					next_state = parse_element(save_ptr, working_state);
 				}
 				m_states[next_state].epsilon_transitions.emplace(end_state);
