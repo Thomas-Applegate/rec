@@ -6,6 +6,8 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <ostream>
+#include <type_traits>
 
 class Regex_Exception : public std::exception
 {
@@ -69,3 +71,15 @@ public:
 private:
 	std::vector<state> m_states;
 };
+
+std::ostream& operator<<(std::ostream& os, const Nfa::state& state);
+std::ostream& operator<<(std::ostream& os, const Dfa::state& state);
+
+template <typename T>
+typename std::enable_if_t<std::is_same_v<T, Nfa>||std::is_same_v<T,Dfa>, std::ostream&>
+operator<<(std::ostream& os, const T& fsm)
+{
+	const std::vector<typename T::state>& states = fsm.states();
+	for(size_t i = 0; i < states.size()-1; i++) os << i << '\t' << states[i] << '\n';
+	return os << states.size()-1 << '\t' << states.back();
+}

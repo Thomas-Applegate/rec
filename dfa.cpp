@@ -1,6 +1,8 @@
 #include "dfa.h"
 
 #include <utility>
+#include <iterator>
+#include <iostream>
 
 Regex_Exception::Regex_Exception(const char* what) noexcept : m_what(what) {}
 Regex_Exception::Regex_Exception(const Regex_Exception& oth) noexcept : m_what(oth.m_what) {}
@@ -250,7 +252,7 @@ size_t Nfa::parse_regex(const char*& str, size_t in_state)
 
 Nfa::Nfa(const char* regex) : m_states(1)
 {
-	//first state is starting state
+	//state 1 is starting state
 	size_t acc_state = parse_regex(regex, 0);
 	m_states[acc_state].is_accepting = true;
 }
@@ -271,3 +273,63 @@ Dfa::Dfa(const Nfa& nfa) {}
 
 Dfa::operator const std::vector<Dfa::state>&() const noexcept { return m_states; }
 const std::vector<Dfa::state>& Dfa::states() const noexcept { return m_states; }
+
+//formated output for Nfa and Dfa
+
+template<typename T, typename F>
+static void format_delim(const T& container, F&& func, std::ostream& os = std::cout, const char* delim = ", ")
+{
+	if(container.empty()) return;
+	auto last = std::prev(container.cend());
+	for(auto it = container.cbegin(); it != last; it++)
+	{
+		func(os, *it);
+		os << delim;
+	}
+	func(os, *last);
+}
+
+template<typename T>
+static void format_delim(const T& container, std::ostream& os = std::cout, const char* delim = ", ")
+{
+	format_delim(container, [](std::ostream& os, const auto& e){os << e;}, os, delim);
+}
+
+std::ostream& operator<<(std::ostream& os, const Nfa::state& s)
+{
+	os << "ε→{";
+	format_delim(s.epsilon_transitions, os);
+	os << "} Ω→{";
+	format_delim(s.omega_transitions, os);
+	int last_ch = 256;
+	for(const auto&[ch, i] : s.ch_transitions)
+	{
+		if(ch != last_ch)
+		{
+			os << "} " << ch << "->{" << i;
+		}else
+		{
+			os << ", " << i;
+		}
+		last_ch = ch;
+	}
+	os << '}';
+	if(s.is_accepting) os << " Accepting";
+	return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const Dfa::state& s)
+{
+	std::visit([&os](auto&& t){
+		if constexpr (std::is_same_v<std::decay_t<decltype(t)>, size_t>)
+			os << "Ω→" << t;
+		else
+		{
+			if(t.empty()) return;
+			format_delim(t,
+				[](std::ostream& os, const auto& p){os << p.first << "→" << p.second;}, os);
+		}
+	}, s.transitions);
+	if(s.is_accepting) os << " Accepting";
+	return os;
+}
