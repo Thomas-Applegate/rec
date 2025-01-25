@@ -2,11 +2,12 @@
 
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <exception>
 #include <string>
 #include <cstring>
-#include <iterator>
+#include <cctype>
+#include <limits>
+#include <cmath>
 
 static inline void check_stream_should_close(std::istream& is)
 {
@@ -14,23 +15,13 @@ static inline void check_stream_should_close(std::istream& is)
 	if(fp != nullptr) fp->close();
 }
 
-static inline void check_sstream_fail(std::stringstream& ss, std::istream& is, unsigned int lineno)
+static bool valid_name_ch(char ch)
 {
-	if(ss.fail() || ss.bad())
-	{
-		std::cerr << "error: stringstream error wile reading input at line " << lineno << '\n';
-		check_stream_should_close(is);
-		std::exit(1);
-	}
-}
-
-static bool validate_name(const std::string& name)
-{
-	auto it = name.begin();
-	switch(*it)
+	switch(ch)
 	{
 	default: return false;
 	case '_':
+	case '-':
 	case 'A':
 	case 'B':
 	case 'C':
@@ -82,145 +73,119 @@ static bool validate_name(const std::string& name)
 	case 'w':
 	case 'x':
 	case 'y':
-	case 'z': break;
+	case 'z': 
+	case '0':
+	case '1': 
+	case '2': 
+	case '3':
+	case '4': 
+	case '5': 
+	case '6': 
+	case '7': 
+	case '8': 
+	case '9': return true;
 	}
-	for(; it != name.end(); it++)
-	{
-		switch(*it)
-		{
-		default: return false;
-		case '_':
-		case '-':
-		case 'A':
-		case 'B':
-		case 'C':
-		case 'D':
-		case 'E':
-		case 'F':
-		case 'G':
-		case 'H':
-		case 'I':
-		case 'J':
-		case 'K':
-		case 'L':
-		case 'M':
-		case 'N':
-		case 'O':
-		case 'P':
-		case 'Q':
-		case 'R':
-		case 'S':
-		case 'T':
-		case 'U':
-		case 'V':
-		case 'W':
-		case 'X':
-		case 'Y':
-		case 'Z':
-		case 'a':
-		case 'b':
-		case 'c':
-		case 'd':
-		case 'e':
-		case 'f':
-		case 'g':
-		case 'h':
-		case 'i':
-		case 'j':
-		case 'k':
-		case 'l':
-		case 'm':
-		case 'n':
-		case 'o':
-		case 'p':
-		case 'q':
-		case 'r':
-		case 's':
-		case 't':
-		case 'u':
-		case 'v':
-		case 'w':
-		case 'x':
-		case 'y':
-		case 'z': 
-		case '0':
-		case '1': 
-		case '2': 
-		case '3':
-		case '4': 
-		case '5': 
-		case '6': 
-		case '7': 
-		case '8': 
-		case '9': break;
-		}
-	}
-	return true;
 }
 
-static std::unordered_map<std::string, std::string> read_stream(std::istream& is)
+static token_data_map read_stream(std::istream& is)
 {
-	std::unordered_map<std::string, std::string> ret;
 	if(is.eof())
 	{
 		std::cerr << "error: the input is empty\n";
 		check_stream_should_close(is);
 		std::exit(1);
 	}
-	for(unsigned int lineno = 1; !is.eof(); lineno++)
+	token_data_map ret;
+	
+	unsigned int lineno = 1;
+	while(!is.eof())
 	{
-		//iterate over lines of input
-		std::string line;
-		std::getline(is, line);
-		if(line.empty()) continue; //skip empty line
-		else if(is.fail())
+		int ilex_state = 0; //controls which part of each line we are scanning (mode, name, or regex)
+		std::string tk_name;
+		token_data tk_data;
+		std::string& rstr = std::get<std::string>(tk_data.regex);
+		//loop though lines of file
+		for(int ch = is.get(); ch != '\n' && ch != EOF; ch=is.get())
 		{
-			std::cerr << "error: failed to read from the input at line " << lineno << '\n';
-			check_stream_should_close(is);
-			std::exit(1);
-		}
-		std::stringstream liness(line);
-		check_sstream_fail(liness, is, lineno);
-		
-		//get token name
-		std::string name;
-		liness >> name; //the first string is the token name
-		if(!validate_name(name))
-		{
-			std::cerr << "error: token '" << name << "' on line " << lineno << " is not a vlid identifier\n";
-			check_stream_should_close(is);
-			std::exit(1);
-		}
-		auto [it, first] = ret.try_emplace(std::move(name));
-		std::string& rs = it->second;
-		
-		if(liness.eof())
-		{
-			std::cerr << "error: no regex on line " << lineno << " for token '";
-			std::cerr << it->first << "'\n";
-			check_stream_should_close(is);
-			std::exit(1);
-		}
-		while (!liness.eof()) //read all regex strings on this line
-		{
-			std::string rstr;
-			liness >> rstr;
-			check_sstream_fail(liness, is, lineno);
-			if(!first)
+			//ignore comments
+			if(ch == '#')
 			{
-				rs.push_back('|'); //alternation with previous regex
+				is.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+				lineno++;
+				continue;
 			}
-			first=false;
-			rs.append(rstr);
+			if(ilex_state < 0) //remove leading whitespace while preserving ilex_state
+			{
+				switch(ch)
+				{
+				case ' ':
+				case '\r':
+				case '\t':
+				case '\f':
+				case '\v': break;
+				default:
+					ilex_state *= -1;
+					is.unget();
+				}
+				continue;
+			}
+			switch(ilex_state)
+			{
+			case 0: //token mode
+				if(isspace(ch)) break;
+				switch(ch)
+				{
+				default: is.unget(); //no special character treated as standard mode
+				case '.': tk_data.mode = token_data::lex_mode::standard; break;
+				case '-': tk_data.mode = token_data::lex_mode::ignore; break;
+				case '+': tk_data.mode = token_data::lex_mode::save; break;
+				case '!': tk_data.mode = token_data::lex_mode::error; break;
+				}
+				ilex_state = -1;
+				break;
+			case 1: //name
+				if(valid_name_ch(ch))
+				{
+					tk_name += ch;
+					if(isspace(is.peek())) ilex_state = -2;
+					break;
+				}
+				std::cerr << "error: invalid token name on line " << lineno << '\n';
+				std::exit(1);
+			case 3: //regex step 2
+				rstr += '|';
+			case 2: //regex step 1
+				rstr += ch;
+				if(isspace(is.peek())) ilex_state = -3;
+				break;
+			}
 		}
-#ifdef DEBUG
-		std::cout << "debug: token '" << it->first << "':" << rs << '\n';
-#endif
+		if(tk_name.empty())
+		{
+			std::cerr << "error: no token name provided on line " << lineno << '\n';
+			std::exit(1);
+		}
+		if(rstr.empty())
+		{
+			std::cerr << "error: no regex provided on line " << lineno << '\n';
+			std::exit(1);
+		}
+		//try emplace into map
+		auto [iter, did_insert] = ret.second.try_emplace(tk_name, std::move(tk_data));
+		if(did_insert)
+		{
+			ret.first.push_back(std::move(tk_name));
+		}else
+		{
+			std::cerr << "error: duplicate token '" << tk_name << "' on line " << lineno << '\n';
+			std::exit(1);
+		}
+		lineno++;
 	}
 	return ret;
 }
 
-static std::unordered_map<std::string, std::string> read_input(int argc, const char** argv)
+static token_data_map read_input(int argc, const char** argv)
 {
 	if(argc >= 2) //input file
 	{
@@ -248,19 +213,25 @@ static std::unordered_map<std::string, std::string> read_input(int argc, const c
 	}
 }
 
-static std::unordered_map<std::string, Nfa> parse_regexes(int argc, const char** argv)
+token_data_map parse_input(int argc, const char** argv)
 {
-	std::unordered_map<std::string, std::string> s_map = read_input(argc, argv);
-	std::unordered_map<std::string, Nfa> ret(s_map.bucket_count());
-	for(auto it = s_map.begin(); it != s_map.end(); it = s_map.erase(it))
+	token_data_map token_map = read_input(argc, argv);
+	for(auto& [k, v] : token_map.second)
 	{
-		const auto& [k,v] = *it;
 		try
 		{
 #ifdef DEBUG
-			std::cout << "debug: constructing Nfa for token '" << k << "'\n";
+			std::cout << "debug: constructing nfa for token '" << k << "'\n";
 #endif
-			ret.emplace(k, v);
+			Nfa nfa(std::get<std::string>(v.regex));
+#ifdef DEBUG
+			std::cout << nfa << '\n';
+			std::cout << "debug: constructing dfa for token '" << k << "'\n";
+#endif
+			v.regex.emplace<Dfa>(nfa);
+#ifdef DEBUG
+			std::cout << std::get<Dfa>(v.regex) << '\n';
+#endif
 		}catch(const std::exception& e)
 		{
 			std::cerr << "error: failed to parse regex: token '" << k;
@@ -268,24 +239,5 @@ static std::unordered_map<std::string, Nfa> parse_regexes(int argc, const char**
 			std::exit(2);
 		}
 	}
-#ifdef DEBUG
-	for(const auto&[k,v] : ret)
-	{
-		std::cout << "debug: nfa state count for token '" << k << "':";
-		std::cout << v.states().size() << '\n';
-	}
-#endif
-	return ret;
-}
-
-std::unordered_map<std::string, Dfa> parse_input(int argc, const char** argv)
-{
-	std::unordered_map<std::string, Nfa> nfa_map = parse_regexes(argc, argv);
-	std::unordered_map<std::string, Dfa> ret(nfa_map.bucket_count());
-	for(auto it = nfa_map.begin(); it != nfa_map.end(); it = nfa_map.erase(it))
-	{
-		const auto& [k,v] = *it;
-		ret.emplace(std::move(k), std::move(v));
-	}
-	return ret;
+	return token_map;
 }
