@@ -97,9 +97,10 @@ static token_data_map read_stream(std::istream& is)
 	}
 	token_data_map ret;
 	
-	unsigned int lineno = 1;
+	unsigned int lineno = 0;
 	while(!is.eof())
 	{
+		lineno++;
 		int ilex_state = 0; //controls which part of each line we are scanning (mode, name, or regex)
 		std::string tk_name;
 		token_data tk_data;
@@ -160,6 +161,7 @@ static token_data_map read_stream(std::istream& is)
 				break;
 			}
 		}
+		if(ilex_state == 0) continue;
 		if(tk_name.empty())
 		{
 			std::cerr << "error: no token name provided on line " << lineno << '\n';
@@ -180,7 +182,6 @@ static token_data_map read_stream(std::istream& is)
 			std::cerr << "error: duplicate token '" << tk_name << "' on line " << lineno << '\n';
 			std::exit(1);
 		}
-		lineno++;
 	}
 	return ret;
 }

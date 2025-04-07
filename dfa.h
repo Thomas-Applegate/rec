@@ -80,6 +80,7 @@ typename std::enable_if_t<std::is_same_v<T, Nfa>||std::is_same_v<T,Dfa>, std::os
 operator<<(std::ostream& os, const T& fsm)
 {
 	const std::vector<typename T::state>& states = fsm.states();
+	if(states.empty()) return os << "empty";
 	for(size_t i = 0; i < states.size()-1; i++) os << i << '\t' << states[i] << '\n';
 	return os << states.size()-1 << '\t' << states.back();
 }

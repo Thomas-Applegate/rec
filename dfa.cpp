@@ -320,16 +320,15 @@ std::ostream& operator<<(std::ostream& os, const Nfa::state& s)
 
 std::ostream& operator<<(std::ostream& os, const Dfa::state& s)
 {
-	std::visit([&os](auto&& t){
-		if constexpr (std::is_same_v<std::decay_t<decltype(t)>, size_t>)
-			os << "Ω→" << t;
-		else
-		{
-			if(t.empty()) return;
-			format_delim(t,
-				[](std::ostream& os, const auto& p){os << p.first << "→" << p.second;}, os);
-		}
-	}, s.transitions);
+	if(const size_t* omegat = std::get_if<size_t>(&s.transitions))
+	{
+		os << "Ω→" << *omegat;
+	}else
+	{
+		const std::map<char, size_t>* t = std::get_if<std::map<char, size_t>>(&s.transitions);
+		if(!t->empty())
+			format_delim(*t, [](std::ostream& os, const auto& p){os << p.first << "→" << p.second;}, os);
+	}
 	if(s.is_accepting) os << " Accepting";
 	return os;
 }
