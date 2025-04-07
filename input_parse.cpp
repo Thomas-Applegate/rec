@@ -105,7 +105,7 @@ static token_data_map read_stream(std::istream& is)
 		std::string tk_name;
 		token_data tk_data;
 		std::string& rstr = std::get<std::string>(tk_data.regex);
-		//loop though lines of file
+		//loop though a single line
 		for(int ch = is.get(); ch != '\n' && ch != EOF; ch=is.get())
 		{
 			//ignore comments
@@ -115,6 +115,7 @@ static token_data_map read_stream(std::istream& is)
 				lineno++;
 				continue;
 			}
+			//negative ilex_state skips leading whitespace
 			if(ilex_state < 0) //remove leading whitespace while preserving ilex_state
 			{
 				switch(ch)
@@ -155,6 +156,7 @@ static token_data_map read_stream(std::istream& is)
 				std::exit(1);
 			case 3: //regex step 2
 				rstr += '|';
+				ilex_state = 2;
 			case 2: //regex step 1
 				rstr += ch;
 				if(isspace(is.peek())) ilex_state = -3;
