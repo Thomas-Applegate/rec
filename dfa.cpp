@@ -277,7 +277,7 @@ const std::vector<Dfa::state>& Dfa::states() const noexcept { return m_states; }
 //formated output for Nfa and Dfa
 
 template<typename T, typename F>
-static void format_delim(const T& container, F&& func, std::ostream& os = std::cout, const char* delim = ", ")
+static void format_delim(const T& container, F&& func, std::ostream& os, const char* delim = ", ")
 {
 	if(container.empty()) return;
 	auto last = std::prev(container.cend());
@@ -290,7 +290,7 @@ static void format_delim(const T& container, F&& func, std::ostream& os = std::c
 }
 
 template<typename T>
-static void format_delim(const T& container, std::ostream& os = std::cout, const char* delim = ", ")
+static void format_delim(const T& container, std::ostream& os, const char* delim = ", ")
 {
 	format_delim(container, [](std::ostream& os, const auto& e){os << e;}, os, delim);
 }
