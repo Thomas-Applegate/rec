@@ -87,7 +87,7 @@ static bool valid_name_ch(char ch)
 	}
 }
 
-static token_data_map read_stream(std::istream& is)
+static insert_order_map<std::string, token_data> read_stream(std::istream& is)
 {
 	if(is.eof())
 	{
@@ -95,7 +95,7 @@ static token_data_map read_stream(std::istream& is)
 		check_stream_should_close(is);
 		std::exit(1);
 	}
-	token_data_map ret;
+	insert_order_map<std::string, token_data> ret;
 	
 	unsigned int lineno = 0;
 	while(!is.eof())
@@ -175,20 +175,18 @@ static token_data_map read_stream(std::istream& is)
 			std::exit(1);
 		}
 		//try emplace into map
-		auto [iter, did_insert] = ret.second.try_emplace(tk_name, std::move(tk_data));
-		if(did_insert)
-		{
-			ret.first.push_back(std::move(tk_name));
-		}else
+		auto [iter, did_insert] = ret.emplace_back(std::move(tk_name), std::move(tk_data));
+		if(!did_insert)
 		{
 			std::cerr << "error: duplicate token '" << tk_name << "' on line " << lineno << '\n';
 			std::exit(1);
 		}
 	}
+	check_stream_should_close(is);
 	return ret;
 }
 
-static token_data_map read_input(int argc, const char** argv)
+static insert_order_map<std::string, token_data> read_input(int argc, const char** argv)
 {
 	if(argc >= 2) //input file
 	{
@@ -216,7 +214,7 @@ static token_data_map read_input(int argc, const char** argv)
 	}
 }
 
-token_data_map parse_input(int argc, const char** argv)
+insert_order_map<std::string, token_data> parse_input(int argc, const char** argv)
 {
 	token_data_map token_map = read_input(argc, argv);
 	for(auto& [k, v] : token_map.second)
