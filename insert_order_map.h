@@ -32,12 +32,12 @@ private:
 	class b_storage : public H
 	{
 	public:
-		b_storage() noexcept(noexcept(H())) : H(), buckets(nullptr), bucket_count(0) {}
-		b_storage(const H& h) : H(h), buckets(nullptr), bucket_count(0) {}
+		b_storage() noexcept(noexcept(H())) : H(), buckets(new bucket_type[4]()), bucket_count(4) {}
+		b_storage(const H& h) : H(h), buckets(new bucket_type[4]()), bucket_count(4) {}
 		b_storage(const H& h, size_type bucket_count)
-			: H(h), buckets(new bucket_type[bucket_count]({0})), bucket_count(bucket_count) {}
+			: H(h), buckets(new bucket_type[bucket_count]()), bucket_count(bucket_count) {}
 		b_storage(const b_storage& oth)
-			: H(oth), buckets(new bucket_type[oth.bucket_count]({0})), bucket_count(oth.bucket_count)
+			: H(oth), buckets(new bucket_type[oth.bucket_count]()), bucket_count(oth.bucket_count)
 		{
 			std::copy(oth.cbegin(), oth.cend(), begin());
 		}
@@ -153,12 +153,6 @@ private:
 	{
 		mh.clear();
 		if(me->size() == 0) return;
-		//if no buckets reallocate to vector size divided by 4 and at least 4
-		if(mh.bucket_count == 0)
-		{
-			size_t min_size = me->size()/4 > 4 ? me->size()/4 : 4;
-			mh.realloc(min_size);
-		}
 		for(size_type i = 0; i < me->size(); i++)
 		{
 			if(!mh.insert(bucket(me.v[i].first), i))
