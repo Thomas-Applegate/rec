@@ -27,7 +27,7 @@ public:
 	typedef typename std::vector<value_type>::iterator iterator;
 	typedef typename std::vector<value_type>::const_iterator const_iterator;
 	typedef std::array<size_type, 8> bucket_type;
-	
+		
 private:
 	class b_storage : public H
 	{
@@ -93,7 +93,7 @@ private:
 			if(count > bucket_count)
 			{
 				delete[] buckets;
-				buckets = new bucket_type[count]({0});
+				buckets = new bucket_type[count]();
 				bucket_count = count;
 				return true;
 			}
@@ -102,7 +102,7 @@ private:
 		void realloc(size_type count)
 		{
 			delete[] buckets;
-			buckets = new bucket_type[count]({0});
+			buckets = new bucket_type[count]();
 			bucket_count = count;
 		}
 		
@@ -149,8 +149,6 @@ private:
 		std::vector<value_type> v;
 	};
 	
-		bucket_type& bucket(const K& k) { return mh.buckets[bucket(k)]; }
-	
 	void rehash()
 	{
 		mh.clear();
@@ -173,14 +171,14 @@ private:
 	
 	std::pair<iterator, size_t> lookup(const K& k)
 	{
-		size_t b = bucket(k);
+		size_type b = bucket(k);
 		for(size_t idx : mh.buckets[b])
 		{
 			if(idx>0)
 			{
 				if(me(me.v[idx-1].first, k))
 				{
-					return {std::advance(me->begin(), idx-1), b};
+					return {std::next(me->begin(), idx-1), b};
 				}
 			}
 		}
@@ -435,7 +433,7 @@ public:
 	std::pair<iterator, bool> emplace(size_t idx, Args... args)
 	{
 		if(idx > me->size()) return {me->end(), false};
-		return emplace(std::advance(me->begin(), idx), args...);
+		return emplace(std::next(me->begin(), idx), args...);
 	}
 	
 	iterator erase(iterator pos)
@@ -580,7 +578,7 @@ public:
 			{
 				if(me(me.v[idx-1].first, k))
 				{
-					return std::advance(me->begin(), idx-1);
+					return std::next(me->begin(), idx-1);
 				}
 			}
 		}
@@ -596,7 +594,7 @@ public:
 			{
 				if(me(me.v[idx-1].first, k))
 				{
-					return std::advance(me->cbegin(), idx-1);
+					return std::next(me->cbegin(), idx-1);
 				}
 			}
 		}
@@ -628,6 +626,7 @@ public:
 			if(i > 0) acc++;
 		return acc;
 	}
+	
 	size_type bucket(const K& k) const
 	{
 		return mh(k)%mh.bucket_count;
