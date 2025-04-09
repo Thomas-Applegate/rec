@@ -216,8 +216,8 @@ static insert_order_map<std::string, token_data> read_input(int argc, const char
 
 insert_order_map<std::string, token_data> parse_input(int argc, const char** argv)
 {
-	token_data_map token_map = read_input(argc, argv);
-	for(auto& [k, v] : token_map.second)
+	insert_order_map<std::string, token_data> token_map = read_input(argc, argv);
+	for(auto& [k, v] : token_map)
 	{
 		try
 		{

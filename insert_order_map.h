@@ -24,9 +24,173 @@ public:
 	typedef value_type& reference;
 	typedef value_type* pointer;
 	typedef const value_type* const_pointer;
-	typedef std::vector<value_type>::iterator iterator;
-	typedef std::vector<value_type>::const_iterator const_iterator;
+	typedef typename std::vector<value_type>::iterator iterator;
+	typedef typename std::vector<value_type>::const_iterator const_iterator;
 	typedef std::array<size_type, 8> bucket_type;
+	
+private:
+	class b_storage : public H
+	{
+	public:
+		b_storage() noexcept(noexcept(H())) : H(), buckets(nullptr), bucket_count(0) {}
+		b_storage(const H& h) : H(h), buckets(nullptr), bucket_count(0) {}
+		b_storage(const H& h, size_type bucket_count)
+			: H(h), buckets(new bucket_type[bucket_count]({0})), bucket_count(bucket_count) {}
+		b_storage(const b_storage& oth)
+			: H(oth), buckets(new bucket_type[oth.bucket_count]({0})), bucket_count(oth.bucket_count)
+		{
+			std::copy(oth.cbegin(), oth.cend(), begin());
+		}
+		b_storage(b_storage&& oth)
+			: H(std::move(oth)), buckets(oth.buckets), bucket_count(oth.bucket_count)
+		{
+			oth.buckets = nullptr;
+			oth.bucket_count = 0;
+		}
+		~b_storage() { delete[] buckets; }
+		
+		b_storage& operator=(const b_storage& oth)
+		{
+			if(this != &oth)
+			{
+				realloc(oth.mh.size());
+				std::copy(oth.cbegin(), oth.cend(), begin());
+			}
+			return *this;
+		}
+		b_storage& operator=(b_storage&& oth)
+		{
+			if(this != &oth)
+			{
+				delete[] buckets;
+				buckets = oth.buckets;
+				bucket_count = oth.bucket_count;
+				oth.buckets = nullptr;
+				oth.bucket_count = 0;
+			}
+			return *this;
+		}
+		
+		friend void swap(b_storage& a, b_storage& b)
+		{
+			std::swap(static_cast<H&>(a), static_cast<H&>(b));
+			std::swap(a.buckets, b.buckets);
+			std::swap(a.bucket_count, b.bucket_count);
+		}
+		
+		bucket_type* begin() noexcept { return buckets; }
+		bucket_type* end() noexcept { return buckets+bucket_count; }
+		const bucket_type* begin() const noexcept { return buckets; }
+		const bucket_type* end() const noexcept { return buckets+bucket_count; }
+		const bucket_type* cbegin() const noexcept { return buckets; }
+		const bucket_type* cend() const noexcept { return buckets+bucket_count; }
+		
+		size_type size() const noexcept { return bucket_count; }
+		
+		void clear() { std::memset(buckets, 0, sizeof(bucket_type)*bucket_count); }
+		bool resize(size_type count)
+		{
+			if(count > bucket_count)
+			{
+				delete[] buckets;
+				buckets = new bucket_type[count]({0});
+				bucket_count = count;
+				return true;
+			}
+			return false;
+		}
+		void realloc(size_type count)
+		{
+			delete[] buckets;
+			buckets = new bucket_type[count]({0});
+			bucket_count = count;
+		}
+		
+		bool insert(size_type bucket, size_type i) noexcept
+		{
+			if(bucket >= bucket_count) return false;
+			for(size_type& s : buckets[bucket])
+			{
+				if(s == 0)
+				{
+					s=++i;
+					return true;
+				}
+			}
+			return false;
+		}
+	
+		std::array<size_type, 8>* buckets;
+		size_type bucket_count;
+	};
+	
+	class e_storage : public E
+	{
+	public:
+		e_storage() noexcept(noexcept(E())) : E(), v() {}
+		e_storage(const E& e) : E(e), v() {}
+		e_storage(const E& e, std::initializer_list<value_type> ilist) : E(e), v(ilist) {}
+		template <typename InputIt>
+		e_storage(const E& e, InputIt first, InputIt last) : E(e), v(first, last) {}
+	
+		/*
+		std::vector<value_type>& operator*() noexcept { return elements; }
+		const std::vector<value_type>& operator*() noexcept const { return elements; }
+		*/
+		std::vector<value_type>* operator->() noexcept { return &v; }
+		const std::vector<value_type>* operator->() const noexcept { return &v; }
+		
+		friend void swap(e_storage& a, e_storage& b)
+		{
+			std::swap(static_cast<E&>(a), static_cast<E&>(b));
+			std::swap(a.v, b.v);
+		}
+		
+		std::vector<value_type> v;
+	};
+	
+		bucket_type& bucket(const K& k) { return mh.buckets[bucket(k)]; }
+	
+	void rehash()
+	{
+		mh.clear();
+		if(me->size() == 0) return;
+		//if no buckets reallocate to vector size divided by 4 and at least 4
+		if(mh.bucket_count == 0)
+		{
+			size_t min_size = me->size()/4 > 4 ? me->size()/4 : 4;
+			mh.realloc(min_size);
+		}
+		for(size_type i = 0; i < me->size(); i++)
+		{
+			if(!mh.insert(bucket(me.v[i].first), i))
+			{
+				mh.realloc(mh.bucket_count + (mh.bucket_count>>1));
+				i = 0;
+			}
+		}
+	}
+	
+	std::pair<iterator, size_t> lookup(const K& k)
+	{
+		size_t b = bucket(k);
+		for(size_t idx : mh.buckets[b])
+		{
+			if(idx>0)
+			{
+				if(me(me.v[idx-1].first, k))
+				{
+					return {std::advance(me->begin(), idx-1), b};
+				}
+			}
+		}
+		return {me->end(), b};
+	}
+	
+	b_storage mh;
+	e_storage me;
+	
+public:
 	
 	insert_order_map() noexcept(noexcept(b_storage()) && noexcept(e_storage()))
 		: mh(), me() {}
@@ -79,7 +243,7 @@ public:
 	
 	std::pair<iterator, bool> push_back(const value_type& val)
 	{
-		auto [it, b] = find(val.first);
+		auto [it, b] = lookup(val.first);
 		if(it == me->end())
 		{
 			me->push_back(val);
@@ -93,7 +257,7 @@ public:
 	
 	std::pair<iterator, bool> push_back(value_type&& val)
 	{
-		auto [it, b] = find(val.first);
+		auto [it, b] = lookup(val.first);
 		if(it == me->end())
 		{
 			me->push_back(std::move(val));
@@ -108,12 +272,12 @@ public:
 	template <typename... Args>
 	std::pair<iterator, bool> emplace_back(K&& key, Args... args)
 	{
-		auto [it, b] = find(key);
+		auto [it, b] = lookup(key);
 		if(it == me->end())
 		{
 			me->emplace_back(std::move(key), std::forward<Args>(args)...);
 			if(!mh.insert(b, me->size())) rehash();
-			return {std::prev(me->end(), true};
+			return {std::prev(me->end()), true};
 		}else
 		{
 			return {it, false};
@@ -124,7 +288,7 @@ public:
 	std::pair<iterator, bool> emplace_back(Args... args)
 	{
 		const value_type& val = me->emplace_back(std::forward<Args>(args)...);
-		auto [it, b] = find(val.first)
+		auto [it, b] = find(val.first);
 		if(it == me->end())
 		{
 			if(!mh.insert(b, me->size())) rehash();
@@ -179,65 +343,65 @@ public:
 	template <typename M>
 	std::pair<iterator, bool> insert_or_assign(const K& k, M&& obj)
 	{
-		auto [it, b] = find(k);
+		auto [it, b] = lookup(k);
 		if(k == me->end())
 		{
 			me->emplace_back(k, std::forward<M>(obj));
 			if(!mh.insert(b, me->size())) rehash();
-			return {std::prev(me->end(), true};
+			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
-			return {it, false}
+			return {it, false};
 		}
 	}
 	
 	template <typename M>
 	std::pair<iterator, bool> insert_or_assign(K&& k, M&& obj)
 	{
-		auto [it, b] = find(k);
+		auto [it, b] = lookup(k);
 		if(k == me->end())
 		{
 			me->emplace_back(std::move(k), std::forward<M>(obj));
 			if(!mh.insert(b, me->size())) rehash();
-			return {std::prev(me->end(), true};
+			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
-			return {it, false}
+			return {it, false};
 		}
 	}
 	
 	template <typename M>
 	std::pair<iterator, bool> insert_or_assign(const_iterator pos, const K& k, M&& obj)
 	{
-		auto [it, b] = find(k);
+		auto [it, b] = lookup(k);
 		if(k == me->end())
 		{
 			me->emplace(pos, k, std::forward<M>(obj));
 			if(!mh.insert(b, me->size())) rehash();
-			return {std::prev(me->end(), true};
+			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
-			return {it, false}
+			return {it, false};
 		}
 	}
 	
 	template <typename M>
 	std::pair<iterator, bool> insert_or_assign(const_iterator pos, K&& k, M&& obj)
 	{
-		auto [it, b] = find(k);
+		auto [it, b] = lookup(k);
 		if(k == me->end())
 		{
 			me->emplace(pos, std::move(k), std::forward<M>(obj));
 			if(!mh.insert(b, me->size())) rehash();
-			return {std::prev(me->end(), true};
+			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
-			return {it, false}
+			return {it, false};
 		}
 	}
 	
 	template <typename... Args>
-	std::pair<iterator, bool> emplace(const_iterator it, K&& key, Args... args)
+	std::pair<iterator, bool> emplace(const_iterator pos, K&& key, Args... args)
 	{
 		auto it = find(key);
 		if(it == me->end())
@@ -252,7 +416,7 @@ public:
 	}
 	
 	template <typename... Args>
-	std::pair<iterator, bool> emplace(const_iterator it, Args... args)
+	std::pair<iterator, bool> emplace(const_iterator pos, Args... args)
 	{
 		value_type val(std::forward<Args>(args)...);
 		auto it = find(val.first);
@@ -271,7 +435,7 @@ public:
 	std::pair<iterator, bool> emplace(size_t idx, Args... args)
 	{
 		if(idx > me->size()) return {me->end(), false};
-		return emplace(std::advance(me->begin(), idx), args);
+		return emplace(std::advance(me->begin(), idx), args...);
 	}
 	
 	iterator erase(iterator pos)
@@ -377,7 +541,7 @@ public:
 		auto [it, b] = find(k);
 		if(it == me->end())
 		{
-			me->emplace_back(key, V());
+			me->emplace_back(k, V());
 			if(!mh.insert(b, me->size())) rehash();
 			return me->back().second();
 		}else
@@ -391,7 +555,7 @@ public:
 		auto [it, b] = find(k);
 		if(it == me->end())
 		{
-			me->emplace_back(std::move(key), V());
+			me->emplace_back(std::move(k), V());
 			if(!mh.insert(b, me->size())) rehash();
 			return me->back().second();
 		}else
@@ -503,163 +667,5 @@ public:
 	{
 		swap(a.mh, b.mh);
 		swap(a.me, b.me);
-	}
-private:
-	class b_storage : public H
-	{
-	public:
-		b_storage() noexcept(noexcept(H())) : H(), buckets(nullptr), bucket_count(0) {}
-		b_storage(const H& h) : H(h), buckets(nullptr), bucket_count(0) {}
-		b_storage(const H& h, size_type bucket_count)
-			: H(h), buckets(new bucket_type[bucket_count]({0})), bucket_count(bucket_count) {}
-		b_storage(const b_storage& oth)
-			: H(oth), buckets(new bucket_type[oth.bucket_count]({0})), bucket_count(oth.bucket_count)
-		{
-			std::copy(oth.cbegin(), oth.cend(), begin());
-		}
-		b_storage(b_storage&& oth)
-			: H(std::move(oth)), buckets(oth.buckets), bucket_count(oth.bucket_count)
-		{
-			oth.buckets = nullptr;
-			oth.bucket_count = 0;
-		}
-		~b_storage() { delete[] buckets; }
-		
-		b_storage& operator=(const b_storage& oth)
-		{
-			if(this != &oth)
-			{
-				realloc(oth.mh.size());
-				std::copy(oth.cbegin(), oth.cend(), begin());
-			}
-			return *this;
-		}
-		b_storage& operator=(b_storage&& oth)
-		{
-			if(this != &oth)
-			{
-				delete[] buckets;
-				buckets = oth.buckets;
-				bucket_count = oth.bucket_count;
-				oth.buckets = nullptr;
-				oth.bucket_count = 0;
-			}
-			return *this;
-		}
-		
-		friend void swap(b_storage& a, b_storage& b)
-		{
-			std::swap(static_cast<H&>(a), static_cast<H&>(b));
-			std::swap(a.buckets, b.buckets);
-			std::swap(a.bucket_count, b.bucket_count);
-		}
-		
-		bucket_type* begin() noexcept { return buckets; }
-		bucket_type* end() noexcept { return buckets+bucket_count; }
-		const bucket_type* begin() noexcept const { return buckets; }
-		const bucket_type* end() noexcept const { return buckets+bucket_count; }
-		const bucket_type* cbegin() noexcept const { return buckets; }
-		const bucket_type* cend() noexcept const { return buckets+bucket_count; }
-		
-		size_type size() noexcept const { return bucket_count; }
-		
-		void clear() { std::memset(buckets, 0, sizeof(bucket_type)*bucket_count); }
-		bool resize(size_type count)
-		{
-			if(count > bucket_count)
-			{
-				delete[] buckets;
-				buckets = new bucket_type[count]({0});
-				bucket_count = count;
-				return true;
-			}
-			return false;
-		}
-		void realloc(size_type count)
-		{
-			delete[] buckets;
-			buckets = new bucket_type[count]({0});
-			bucket_count = count;
-		}
-		
-		bool insert(size_type bucket, size_type i) noexcept
-		{
-			if(bucket >= bucket_count) return false;
-			for(size_type& s : buckets[bucket])
-			{
-				if(s == 0)
-				{
-					s=++i;
-					return true;
-				}
-			}
-			return false;
-		}
-	
-		std::array<size_type, 8>* buckets;
-		size_type bucket_count;
-	} mh;
-	
-	class e_storage : public E
-	{
-	public:
-		e_storage() noexcept(noexcept(E())) : E(), v() {}
-		e_storage(const E& e) : E(e), v() {}
-		e_storage(const E& e, std::initializer_list<value_type> ilist) : E(e), v(ilist) {}
-		template <typename InputIt>
-		e_storage(const E& e, InputIt first, InputIt last) : E(e), v(first, last) {}
-	
-		/*
-		std::vector<value_type>& operator*() noexcept { return elements; }
-		const std::vector<value_type>& operator*() noexcept const { return elements; }
-		*/
-		std::vector<value_type>* operator->() noexcept { return &v; }
-		const std::vector<value_type>* operator->() noexcept const { return &v; }
-		
-		friend void swap(e_storage& a, e_storage& b)
-		{
-			std::swap(static_cast<E&>(a), static_cast<E&>(b);
-			std::swap(a.v, b.v);
-		}
-		
-		std::vector<value_type> v;
-	} me;
-	
-	bucket_type& bucket(const K& k) { return mh.buckets[bucket(k)]; }
-	
-	void rehash()
-	{
-		mh.clear();
-		if(me->size() == 0) return;
-		//if no buckets reallocate to vector size divided by 4 and at least 4
-		if(mh.bucket_count == 0)
-		{
-			size_t min_size = me->size()/4 > 4 ? me->size()/4 : 4;
-			mh.realloc(min_size);
-		}
-		for(size_type i = 0; i < me->size(); i++)
-		{
-			if(!mh.insert(bucket(me.[i].first), i))
-			{
-				mh.realloc(mh.bucket_count + (mh.bucket_count>>1));
-				i = 0;
-			}
-		}
-	}
-	
-	std::pair<iterator, size_t> find(const K& k)
-	{
-		size_t b = bucket(k);
-		for(size_t idx : mh.buckets[b])
-		{
-			if(idx>0)
-			{
-				if(me(me.v[idx-1].first, k))
-				{
-					return {std::advance(me->begin(), idx-1), b};
-				}
-			}
-		}
-		return {me->end(), b};
 	}
 };
