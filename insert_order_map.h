@@ -239,7 +239,7 @@ public:
 		if(it == me->end())
 		{
 			me->push_back(val);
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -253,7 +253,7 @@ public:
 		if(it == me->end())
 		{
 			me->push_back(std::move(val));
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -268,7 +268,7 @@ public:
 		if(it == me->end())
 		{
 			me->emplace_back(std::move(key), std::forward<Args>(args)...);
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -283,7 +283,7 @@ public:
 		auto [it, b] = find(val.first);
 		if(it == me->end())
 		{
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(it), true};
 		}else
 		{
@@ -339,7 +339,7 @@ public:
 		if(k == me->end())
 		{
 			me->emplace_back(k, std::forward<M>(obj));
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
@@ -354,7 +354,7 @@ public:
 		if(k == me->end())
 		{
 			me->emplace_back(std::move(k), std::forward<M>(obj));
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
@@ -369,7 +369,7 @@ public:
 		if(k == me->end())
 		{
 			me->emplace(pos, k, std::forward<M>(obj));
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
@@ -384,7 +384,7 @@ public:
 		if(k == me->end())
 		{
 			me->emplace(pos, std::move(k), std::forward<M>(obj));
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
