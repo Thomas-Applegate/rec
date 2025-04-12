@@ -45,16 +45,16 @@ private:
 	//recursively parses a regex, takes the string and input state
 	//returns the index of the final state of the regex
 	
-	//TODO size_t parse_regex(const char*& str, size_t in_state);
+	size_t parse_regex(std::string_view& str, size_t in_state);
 	
 	//recursively parses a chunk of a regex, takes the string and input state
 	//returns the index of the final state of the chunk
 	
-	//size_t parse_chunk(const char*& str, size_t in_state);
+	size_t parse_chunk(std::string_view& str, size_t in_state);
 	
 	//recursively parses a single element of a regex, takes the string and input state
 	//returns the index of the final state of the chunk
-	//TODO size_t parse_element(const char*& str, size_t in_state);
+	size_t parse_element(std::string_view& str, size_t in_state);
 };
 
 class Dfa

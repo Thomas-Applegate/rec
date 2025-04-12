@@ -13,19 +13,20 @@ Regex_Exception& Regex_Exception::operator=(const Regex_Exception& oth) noexcept
 }
 const char* Regex_Exception::what() const noexcept { return m_what; }
 
-static unsigned int lex_number(const char*& str)
+static unsigned int lex_number(std::string_view& str)
 {
+	if(str.empty()) throw Regex_Exception("encountered end of string too early");
 	unsigned int number = 0;
-	char ch = *str++;
+	char ch = str.front();
 	if(!(ch >= '0' && ch <= '9')) throw Regex_Exception("failed to read number expected digit");
 	do
 	{
 		number *= 10;
 		number += static_cast<unsigned int>(ch-'0');
-		ch = *str++;
+		str.remove_prefix(1);
+		if(str.empty()) throw Regex_Exception("encountered end of string too early");
+		ch = str.front();
 	}while(ch >= '0' && ch <= '9');
-	if(ch == 0) throw Regex_Exception("encountered end of string too early");
-	str--;
 	return number;
 }
 
@@ -78,13 +79,118 @@ I' -> digit I' | eps
 N -> - I | + | eps
 */
 
-Nfa::Nfa(std::string_view regex) : m_states() {}
+Nfa::Nfa(std::string_view regex) : m_states()
+{
+	emplace_new_state();
+	size_t fin_state = parse_regex(regex, 0);
+	if(!regex.empty())
+	{
+		throw Regex_Exception("string not empty at end of parse");
+	}
+	m_states[fin_state].is_accepting = true;
+}
 
 size_t Nfa::emplace_new_state()
 {
 	size_t ret = m_states.size();
 	m_states.emplace_back();
 	return ret;
+}
+
+size_t Nfa::parse_regex(std::string_view& str, size_t in_state)
+{
+	size_t fin_state = emplace_new_state();
+	while(true)
+	{
+		size_t next_chunk = parse_chunk(str, in_state);
+		m_states[next_chunk].epsilon_transitions.emplace(fin_state);
+		if(str.empty()) break;
+		if(str.front() != '|') break;
+	}
+	return fin_state;
+}
+
+size_t Nfa::parse_chunk(std::string_view& str, size_t in_state)
+{
+	size_t working_state = in_state;
+	while(!str.empty())
+	{
+		if(str.front() == '|') break;
+		std::string_view scpy = str;
+		size_t efin_state = parse_element(str, working_state);
+		if(!str.empty())
+		{
+			switch(str.front())
+			{
+			default: break;
+			case '*':
+				m_states[working_state].epsilon_transitions.emplace(efin_state);
+			case '+': //intentional fallthrough
+				m_states[efin_state].epsilon_transitions.emplace(working_state);
+				str.remove_prefix(1);
+				break;
+			case '?':
+				m_states[working_state].epsilon_transitions.emplace(efin_state);
+				str.remove_prefix(1);
+				break;
+			case '{':
+			{
+				str.remove_prefix(1);
+				unsigned int min = lex_number(str);
+				unsigned int max;
+				std::vector<size_t> save_states;
+				switch(min)
+				{
+				case 0: m_states[working_state].epsilon_transitions.emplace(efin_state);
+				case 1: break;
+				default:
+					for(unsigned int i = 1; i < min; i++)
+					{
+						working_state = efin_state;
+						std::string_view scpy2 = scpy;
+						efin_state = parse_element(scpy2, working_state);
+					}
+				}
+				if(str.empty()) throw Regex_Exception("encountered end of string too early");
+				switch(str.front())
+				{
+				default: throw Regex_Exception("encountered unexprected character in '{}' operator");
+				case '+':
+					m_states[efin_state].epsilon_transitions.emplace(working_state);
+				case '}':
+					str.remove_prefix(1);
+					break;
+				case '-':
+					str.remove_prefix(1);
+					max = lex_number(str);
+					if(max <= min) throw Regex_Exception("max is less than or equal to min inside '{}' operator");
+					for(unsigned int i = min; i < max; i++)
+					{
+						working_state = efin_state;
+						std::string_view scpy2 = scpy;
+						save_states.emplace_back(working_state);
+						efin_state = parse_element(scpy2, working_state);
+					}
+					for(size_t s : save_states)
+					{
+						m_states[s].epsilon_transitions.emplace(efin_state);
+					}
+					if(str.empty()) throw Regex_Exception("encountered end of string too early");
+					if(str.front() != '}') throw Regex_Exception("expected '}' in '{}' operator");
+					str.remove_prefix(1);
+				}
+			}}
+		}
+		working_state = efin_state;
+	}
+	return working_state;
+}
+
+size_t Nfa::parse_element(std::string_view& str, size_t in_state)
+{
+	//TODO
+	throw Regex_Exception("parse_element not yet implemented");
+	return in_state;
 }
 
 Nfa::operator const std::vector<Nfa::state>&() const noexcept { return m_states; }
