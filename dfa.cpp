@@ -227,6 +227,7 @@ size_t Nfa::parse_element(std::string_view& str, size_t in_state)
 		out_state = parse_regex(str, in_state);
 		break;
 	case '[': //range of charachters
+		out_state = emplace_new_state();
 		while(str.front() != ']')
 		{
 			if(str.empty()) throw Regex_Exception("encountered end of string too early");
