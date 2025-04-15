@@ -222,7 +222,8 @@ insert_order_map<std::string, token_data> parse_input(int argc, const char** arg
 		try
 		{
 #ifdef DEBUG
-			std::cout << "debug: constructing nfa for token '" << k << "'\n";
+			std::cout << "debug: constructing nfa for token '" << k;
+			std::cout << "' with regex '" << std::get<std::string>(v.regex) << "'\n";
 #endif
 			Nfa nfa(std::get<std::string>(v.regex));
 #ifdef DEBUG
