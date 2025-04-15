@@ -127,6 +127,8 @@ size_t Nfa::parse_chunk(std::string_view& str, size_t in_state)
 				default: throw Regex_Exception("encountered unexprected character in '{}' operator");
 				case '+':
 					m_states[efin_state].epsilon_transitions.emplace(working_state);
+					str.remove_prefix(1);
+					if(str.front() != '}') throw Regex_Exception("expected '}' in '{}' operator");
 				case '}':
 					str.remove_prefix(1);
 					break;
