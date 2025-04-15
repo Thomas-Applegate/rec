@@ -100,12 +100,18 @@ size_t Nfa::emplace_new_state()
 size_t Nfa::parse_regex(std::string_view& str, size_t in_state)
 {
 	size_t fin_state = emplace_new_state();
-	while(true) //loop through all chunks seperated by alternation operator
+	bool loop = true;
+	while(loop) //loop through all chunks seperated by alternation operator
 	{
 		size_t next_chunk = parse_chunk(str, in_state);
 		m_states[next_chunk].epsilon_transitions.emplace(fin_state);
 		if(str.empty()) break;
-		if(str.front() != '|') break;
+		switch(str.front())
+		{
+		case ')': loop = false; //intentional fallthrough
+		case '|': str.remove_prefix(1); break;
+		default: throw Regex_Exception("unexpected charachter at end of chunk, expected '|' or ')'");
+		}
 	}
 	return fin_state;
 }
@@ -255,8 +261,6 @@ size_t Nfa::parse_element(std::string_view& str, size_t in_state)
 		break;
 	case '(': //regex
 		e_state = parse_regex(str, in_state);
-		if(str.front() != ')') throw Regex_Exception("expected ')' to match '('");
-		str.remove_prefix(1);
 		break;
 	case '[': //range of charachters
 		throw Regex_Exception("charachter ranges not yet implemented");
