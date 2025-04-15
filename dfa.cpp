@@ -100,7 +100,7 @@ size_t Nfa::emplace_new_state()
 size_t Nfa::parse_regex(std::string_view& str, size_t in_state)
 {
 	size_t fin_state = emplace_new_state();
-	while(true)
+	while(true) //loop through all chunks seperated by alternation operator
 	{
 		size_t next_chunk = parse_chunk(str, in_state);
 		m_states[next_chunk].epsilon_transitions.emplace(fin_state);
@@ -115,7 +115,7 @@ size_t Nfa::parse_chunk(std::string_view& str, size_t in_state)
 	size_t working_state = in_state;
 	while(!str.empty())
 	{
-		if(str.front() == '|') break;
+		if(str.front() == '|' || str.front() == ')') break;
 		std::string_view scpy = str;
 		size_t efin_state = parse_element(str, working_state);
 		if(!str.empty())
@@ -151,7 +151,7 @@ size_t Nfa::parse_chunk(std::string_view& str, size_t in_state)
 						efin_state = parse_element(scpy2, working_state);
 					}
 				}
-				if(str.empty()) throw Regex_Exception("encountered end of string too early");
+				if(str.empty()) throw Regex_Exception("encountered end of string too early - expected '+', '-', or '}'");
 				switch(str.front())
 				{
 				default: throw Regex_Exception("encountered unexprected character in '{}' operator");
@@ -188,9 +188,87 @@ size_t Nfa::parse_chunk(std::string_view& str, size_t in_state)
 
 size_t Nfa::parse_element(std::string_view& str, size_t in_state)
 {
-	//TODO
-	throw Regex_Exception("parse_element not yet implemented");
-	return in_state;
+	if(str.empty()) throw Regex_Exception("encountered end of string too early");
+	size_t e_state;
+	char ch = str.front();
+	str.remove_prefix(1);
+	switch(ch)
+	{
+	case '.': //any charachter
+		e_state = emplace_new_state();
+		m_states[in_state].omega_transitions.emplace(e_state);
+		break;
+	case '/': //escaped charachter
+		if(str.empty()) throw Regex_Exception("encountered end of string too early");
+		e_state = emplace_new_state();
+		ch = str.front();
+		str.remove_prefix(1);
+		switch(ch)
+		{
+		default:
+			m_states[in_state].ch_transitions.emplace(ch, e_state);
+			break;
+		case 'n':
+		case 'N':
+			m_states[in_state].ch_transitions.emplace('\n', e_state);
+			break;
+		case 't':
+		case 'T':
+			m_states[in_state].ch_transitions.emplace('\t', e_state);
+			break;
+		case 'r':
+		case 'R':
+			m_states[in_state].ch_transitions.emplace('\r', e_state);
+			break;
+		case 'v':
+		case 'V':
+			m_states[in_state].ch_transitions.emplace('\v', e_state);
+			break;
+		case 'f':
+		case 'F':
+			m_states[in_state].ch_transitions.emplace('\r', e_state);
+			break;
+		case 'a':
+		case 'A':
+			m_states[in_state].ch_transitions.emplace('\a', e_state);
+			break;
+		case 'b':
+		case 'B':
+			m_states[in_state].ch_transitions.emplace('\b', e_state);
+			break;
+		case 'z':
+		case 'Z':
+			m_states[in_state].ch_transitions.emplace(0, e_state);
+			break;
+		case 'S':
+			m_states[in_state].ch_transitions.emplace('\t', e_state);
+			m_states[in_state].ch_transitions.emplace('\v', e_state);
+			m_states[in_state].ch_transitions.emplace('\r', e_state);
+		case 's':
+			m_states[in_state].ch_transitions.emplace(' ', e_state);
+			break;
+		}
+		break;
+	default: //a specific charachter
+		e_state = emplace_new_state();
+		m_states[in_state].ch_transitions.emplace(ch, e_state);
+		break;
+	case '(': //regex
+		e_state = parse_regex(str, in_state);
+		if(str.front() != ')') throw Regex_Exception("expected ')' to match '('");
+		str.remove_prefix(1);
+		break;
+	case '[': //range of charachters
+		throw Regex_Exception("charachter ranges not yet implemented");
+	case '*': throw Regex_Exception("unexpected charachter '*'");
+	case '+': throw Regex_Exception("unexpected charachter '+'");
+	case '-': throw Regex_Exception("unexpected charachter '-'");
+	case '?': throw Regex_Exception("unexpected charachter '?'");
+	case ']': throw Regex_Exception("unexpected charachter ']'");
+	case '{': throw Regex_Exception("unexpected charachter '{'");
+	case '}': throw Regex_Exception("unexpected charachter '}'");
+	}
+	return e_state;
 }
 
 Nfa::operator const std::vector<Nfa::state>&() const noexcept { return m_states; }
