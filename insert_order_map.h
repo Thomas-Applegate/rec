@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <iterator>
 #include <initializer_list>
+#include <type_traits>
 
 template <typename K, typename V, typename H = std::hash<K>, typename E = std::equal_to<K>>
 class insert_order_map
@@ -32,8 +33,10 @@ private:
 	class b_storage : public H
 	{
 	public:
-		b_storage() noexcept(noexcept(H())) : H(), buckets(new bucket_type[4]()), bucket_count(4) {}
-		b_storage(const H& h) : H(h), buckets(new bucket_type[4]()), bucket_count(4) {}
+		b_storage() noexcept(noexcept(H())) : H(), buckets(nullptr), bucket_count(0) {}
+		b_storage(size_type bucket_count) : H(), buckets(new bucket_type[bucket_count]()),
+			bucket_count(bucket_count) {}
+		b_storage(const H& h) : H(h), buckets(nullptr), bucket_count(0) {}
 		b_storage(const H& h, size_type bucket_count)
 			: H(h), buckets(new bucket_type[bucket_count]()), bucket_count(bucket_count) {}
 		b_storage(const b_storage& oth)
@@ -41,7 +44,7 @@ private:
 		{
 			std::copy(oth.cbegin(), oth.cend(), begin());
 		}
-		b_storage(b_storage&& oth)
+		b_storage(b_storage&& oth) noexcept(std::is_nothrow_move_constructible_v<H>)
 			: H(std::move(oth)), buckets(oth.buckets), bucket_count(oth.bucket_count)
 		{
 			oth.buckets = nullptr;
@@ -49,33 +52,18 @@ private:
 		}
 		~b_storage() { delete[] buckets; }
 		
-		b_storage& operator=(const b_storage& oth)
+		b_storage& operator=(b_storage oth)
 		{
-			if(this != &oth)
-			{
-				realloc(oth.mh.size());
-				std::copy(oth.cbegin(), oth.cend(), begin());
-			}
-			return *this;
-		}
-		b_storage& operator=(b_storage&& oth)
-		{
-			if(this != &oth)
-			{
-				delete[] buckets;
-				buckets = oth.buckets;
-				bucket_count = oth.bucket_count;
-				oth.buckets = nullptr;
-				oth.bucket_count = 0;
-			}
+			swap(oth);
 			return *this;
 		}
 		
-		friend void swap(b_storage& a, b_storage& b)
+		void swap(b_storage& oth) noexcept(std::is_nothrow_swappable_v<H>)
 		{
-			std::swap(static_cast<H&>(a), static_cast<H&>(b));
-			std::swap(a.buckets, b.buckets);
-			std::swap(a.bucket_count, b.bucket_count);
+			using std::swap;
+			swap(static_cast<H&>(*this), static_cast<H&>(oth));
+			swap(buckets, oth.buckets);
+			swap(bucket_count, oth.bucket_count);
 		}
 		
 		bucket_type* begin() noexcept { return buckets; }
@@ -120,18 +108,29 @@ private:
 			return false;
 		}
 	
-		std::array<size_type, 8>* buckets;
+		bucket_type* buckets;
 		size_type bucket_count;
 	};
 	
 	class e_storage : public E
 	{
 	public:
-		e_storage() noexcept(noexcept(E())) : E(), v() {}
+		e_storage() noexcept(noexcept(E()) && noexcept(std::vector<value_type>()))
+			: E(), v() {}
 		e_storage(const E& e) : E(e), v() {}
 		e_storage(const E& e, std::initializer_list<value_type> ilist) : E(e), v(ilist) {}
 		template <typename InputIt>
 		e_storage(const E& e, InputIt first, InputIt last) : E(e), v(first, last) {}
+		e_storage(const e_storage& oth) = default;
+		e_storage(e_storage&& oth) noexcept(std::is_nothrow_move_constructible_v<E>
+			&& std::is_nothrow_move_constructible_v<std::vector<value_type>>)
+			= default;
+		
+		e_storage& operator=(e_storage oth)
+		{
+			swap(oth);
+			return *this;
+		}
 	
 		/*
 		std::vector<value_type>& operator*() noexcept { return elements; }
@@ -140,10 +139,13 @@ private:
 		std::vector<value_type>* operator->() noexcept { return &v; }
 		const std::vector<value_type>* operator->() const noexcept { return &v; }
 		
-		friend void swap(e_storage& a, e_storage& b)
+		void swap(e_storage& oth)
+			noexcept(std::is_nothrow_swappable_v<E>
+			&& std::is_nothrow_swappable_v<std::vector<value_type>>)
 		{
-			std::swap(static_cast<E&>(a), static_cast<E&>(b));
-			std::swap(a.v, b.v);
+			using std::swap;
+			swap(static_cast<E&>(*this), static_cast<E&>(oth));
+			v.swap(oth.v);
 		}
 		
 		std::vector<value_type> v;
@@ -151,8 +153,14 @@ private:
 	
 	void rehash()
 	{
-		mh.clear();
 		if(me->size() == 0) return;
+		if(mh.buckets == nullptr) //empty bucket array
+		{
+			mh.realloc(4);
+		}else
+		{
+			mh.clear();
+		}
 		for(size_type i = 0; i < me->size(); i++)
 		{
 			if(!mh.insert(bucket(me.v[i].first), i))
@@ -166,13 +174,16 @@ private:
 	std::pair<iterator, size_t> lookup(const K& k)
 	{
 		size_type b = bucket(k);
-		for(size_t idx : mh.buckets[b])
+		if(mh.buckets != nullptr)
 		{
-			if(idx>0)
+			for(size_t idx : mh.buckets[b])
 			{
-				if(me(me.v[idx-1].first, k))
+				if(idx>0)
 				{
-					return {std::next(me->begin(), idx-1), b};
+					if(me(me.v[idx-1].first, k))
+					{
+						return {std::next(me->begin(), idx-1), b};
+					}
 				}
 			}
 		}
@@ -190,11 +201,13 @@ public:
 		: mh(h, bucket_count), me(e) {}
 	
 	insert_order_map(const insert_order_map& oth) : mh(oth.mh), me(oth.me) {}
-	insert_order_map(insert_order_map&& oth) : mh(std::move(oth.mh)), me(std::move(oth.me)) {}
+	insert_order_map(insert_order_map&& oth)
+		noexcept(std::is_nothrow_move_constructible_v<b_storage> && std::is_nothrow_move_constructible_v<e_storage>)
+		: mh(std::move(oth.mh)), me(std::move(oth.me)) {}
 	
 	template<typename HOTH>
 	insert_order_map(const insert_order_map<K, V, HOTH, E>& oth)
-		: mh(H(), oth.mh.bucket_count), me(oth.me) { rehash(); }
+		: mh(oth.mh.bucket_count), me(oth.me) { rehash(); }
 	template<typename HOTH>
 	insert_order_map(insert_order_map<K, V, HOTH, E>&& oth) : mh(), me(std::move(oth.me))
 	{
@@ -210,10 +223,18 @@ public:
 	template <typename InputIt>
 	insert_order_map(InputIt first, InputIt last, const H& h = H(), const E& e = E())
 		: mh(h), me(e, first, last) { rehash(); }
+		
+	insert_order_map& operator=(insert_order_map oth)
+	{
+		swap(oth);
+		return *this;
+	}
 	
 	insert_order_map& operator=(std::initializer_list<value_type> ilist)
 	{
 		me.v = ilist;
+		rehash();
+		return *this;
 	}
 	
 	iterator begin() noexcept { return me->begin(); }
@@ -239,7 +260,7 @@ public:
 		if(it == me->end())
 		{
 			me->push_back(val);
-			if(!mh.insert(b, me->size()-1)) rehash();
+			if(!mh.insert(b, me->size())) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -253,7 +274,22 @@ public:
 		if(it == me->end())
 		{
 			me->push_back(std::move(val));
-			if(!mh.insert(b, me->size()-1)) rehash();
+			if(!mh.insert(b, me->size())) rehash();
+			return {std::prev(me->end()), true};
+		}else
+		{
+			return {it, false};
+		}
+	}
+	
+	template <typename... Args>
+	std::pair<iterator, bool> emplace_back(const K& key, Args... args)
+	{
+		auto [it, b] = lookup(key);
+		if(it == me->end())
+		{
+			me->emplace_back(key, std::forward<Args>(args)...);
+			if(!mh.insert(b, me->size())) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -268,7 +304,7 @@ public:
 		if(it == me->end())
 		{
 			me->emplace_back(std::move(key), std::forward<Args>(args)...);
-			if(!mh.insert(b, me->size()-1)) rehash();
+			if(!mh.insert(b, me->size())) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -279,11 +315,11 @@ public:
 	template <typename... Args>
 	std::pair<iterator, bool> emplace_back(Args... args)
 	{
-		const value_type& val = me->emplace_back(std::forward<Args>(args)...);
-		auto [it, b] = find(val.first);
+		me->emplace_back(std::forward<Args>(args)...);
+		auto [it, b] = lookup(me->back().first);
 		if(it == me->end())
 		{
-			if(!mh.insert(b, me->size()-1)) rehash();
+			if(!mh.insert(b, me->size())) rehash();
 			return {std::prev(it), true};
 		}else
 		{
@@ -294,8 +330,7 @@ public:
 	
 	void pop_back()
 	{
-		bucket_type& b = bucket(me->back().first);
-		for(size_t& idx : b)
+		for(size_t& idx : mh.buckets[bucket(me->back().first)])
 			if(idx == me->size())
 			{
 				idx = 0;
@@ -339,7 +374,7 @@ public:
 		if(k == me->end())
 		{
 			me->emplace_back(k, std::forward<M>(obj));
-			if(!mh.insert(b, me->size()-1)) rehash();
+			if(!mh.insert(b, me->size())) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
@@ -354,7 +389,7 @@ public:
 		if(k == me->end())
 		{
 			me->emplace_back(std::move(k), std::forward<M>(obj));
-			if(!mh.insert(b, me->size()-1)) rehash();
+			if(!mh.insert(b, me->size())) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
@@ -369,7 +404,7 @@ public:
 		if(k == me->end())
 		{
 			me->emplace(pos, k, std::forward<M>(obj));
-			if(!mh.insert(b, me->size()-1)) rehash();
+			if(!mh.insert(b, me->size())) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
@@ -384,7 +419,7 @@ public:
 		if(k == me->end())
 		{
 			me->emplace(pos, std::move(k), std::forward<M>(obj));
-			if(!mh.insert(b, me->size()-1)) rehash();
+			if(!mh.insert(b, me->size())) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
@@ -486,16 +521,17 @@ public:
 		return acc;
 	}
 	
-	void swap(insert_order_map& oth)
+	void swap(insert_order_map& oth) noexcept(std::is_nothrow_swappable_v<H>
+		&& std::is_nothrow_swappable_v<E>
+		&& std::is_nothrow_swappable_v<std::vector<value_type>>)
 	{
-		swap(mh, oth.mh);
-		swap(me, oth.me);
+		mh.swap(oth.mh);
+		me.swap(oth.me);
 	}
 	
 	V& at(const K& k)
 	{
-		const bucket_type& b = bucket(k);
-		for(size_t idx : b)
+		for(size_t idx : mh.buckets[bucket(k)])
 		{
 			if(idx>0)
 			{
@@ -511,8 +547,7 @@ public:
 	
 	const V& at(const K& k) const
 	{
-		const bucket_type& b = bucket(k);
-		for(size_t idx : b)
+		for(size_t idx : mh.buckets[bucket(k)])
 		{
 			if(idx>0)
 			{
@@ -565,8 +600,7 @@ public:
 	
 	iterator find(const K& k)
 	{
-		const bucket_type& b = bucket(k);
-		for(size_t idx : b)
+		for(size_t idx : mh.buckets[bucket(k)])
 		{
 			if(idx>0)
 			{
@@ -581,8 +615,7 @@ public:
 	
 	const_iterator find(const K& k) const
 	{
-		const bucket_type& b = bucket(k);
-		for(size_t idx : b)
+		for(size_t idx : mh.buckets[bucket(k)])
 		{
 			if(idx>0)
 			{
@@ -597,8 +630,7 @@ public:
 	
 	bool contains(const K& k) const
 	{
-		const bucket_type& b = bucket(k);
-		for(size_t idx : b)
+		for(size_t idx : mh.buckets[bucket(k)])
 		{
 			if(idx>0)
 			{
@@ -623,6 +655,7 @@ public:
 	
 	size_type bucket(const K& k) const
 	{
+		if(mh.buckets == nullptr) return 0;
 		return mh(k)%mh.bucket_count;
 	}
 	
@@ -655,10 +688,11 @@ public:
 	{
 		return !(lhs==rhs);
 	}
-	
-	friend void swap(insert_order_map& a, insert_order_map& b)
-	{
-		swap(a.mh, b.mh);
-		swap(a.me, b.me);
-	}
 };
+
+template <typename K, typename V, typename H, typename E>
+void swap(insert_order_map<K,V,H,E>& a, insert_order_map<K,V,H,E>& b)
+	noexcept(noexcept(a.swap(b)))
+{
+	a.swap(b);
+}
