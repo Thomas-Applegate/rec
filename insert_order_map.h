@@ -568,8 +568,8 @@ public:
 		return acc;
 	}
 	
-	void swap(insert_order_map& oth) noexcept(noexcept(b_storage::swap(oth.mh))
-		&& noexcept(e_storage::swap(oth.me)))
+	void swap(insert_order_map& oth) noexcept(std::is_nothrow_swappable_v<b_storage>
+		&& std::is_nothrow_swappable_v<e_storage>)
 	{
 		mh.swap(oth.mh);
 		me.swap(oth.me);
