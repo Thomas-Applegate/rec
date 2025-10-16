@@ -36,7 +36,8 @@ private:
 		b_storage() noexcept(noexcept(H())) : H(), buckets(nullptr), bucket_count(0) {}
 		b_storage(size_type bucket_count) : H(), buckets(new bucket_type[bucket_count]()),
 			bucket_count(bucket_count) {}
-		b_storage(const H& h) : H(h), buckets(nullptr), bucket_count(0) {}
+		b_storage(const H& h) noexcept(std::is_nothrow_copy_constructible_v<H>)
+			: H(h), buckets(nullptr), bucket_count(0) {}
 		b_storage(const H& h, size_type bucket_count)
 			: H(h), buckets(new bucket_type[bucket_count]()), bucket_count(bucket_count) {}
 		b_storage(const b_storage& oth)
@@ -52,9 +53,29 @@ private:
 		}
 		~b_storage() { delete[] buckets; }
 		
-		b_storage& operator=(b_storage oth)
+		b_storage& operator=(const b_storage& oth)
 		{
-			swap(oth);
+			if(this != &oth)
+			{
+				H::operator=(oth);
+				resize(oth.bucket_count);
+				clear();
+				std::copy(oth.cbegin(), oth.cend(), begin());
+			}
+			return *this;
+		}
+		
+		b_storage& operator=(b_storage&& oth) noexcept(std::is_nothrow_move_assignable_v<H>)
+		{
+			if(this != &oth)
+			{
+				H::operator=(std::move(oth));
+				delete[] buckets;
+				buckets = oth.buckets;
+				bucket_count = oth.bucket_count;
+				oth.buckets = nullptr;
+				oth.bucket_count = 0;
+			}
 			return *this;
 		}
 		
@@ -115,22 +136,26 @@ private:
 	class e_storage : public E
 	{
 	public:
-		e_storage() noexcept(noexcept(E()) && noexcept(std::vector<value_type>()))
-			: E(), v() {}
-		e_storage(const E& e) : E(e), v() {}
+		e_storage() noexcept(noexcept(E()) && noexcept(std::vector<value_type>())) = default;
+		
+		e_storage(const E& e) noexcept(std::is_nothrow_copy_constructible_v<E>
+			&& noexcept(std::vector<value_type>())) : E(e), v() {}
+		
+		e_storage(std::initializer_list<value_type> ilist) : E(), v(ilist) {}
 		e_storage(const E& e, std::initializer_list<value_type> ilist) : E(e), v(ilist) {}
+		
+		template <typename InputIt>
+		e_storage(InputIt first, InputIt last) : E(), v(first, last) {}
 		template <typename InputIt>
 		e_storage(const E& e, InputIt first, InputIt last) : E(e), v(first, last) {}
+		
 		e_storage(const e_storage& oth) = default;
 		e_storage(e_storage&& oth) noexcept(std::is_nothrow_move_constructible_v<E>
-			&& std::is_nothrow_move_constructible_v<std::vector<value_type>>)
-			= default;
+			&& std::is_nothrow_move_constructible_v<std::vector<value_type>>) = default;
 		
-		e_storage& operator=(e_storage oth)
-		{
-			swap(oth);
-			return *this;
-		}
+		e_storage& operator=(const e_storage& oth) = default;
+		e_storage& operator=(e_storage&& oth) noexcept(std::is_nothrow_move_assignable_v<E>
+			&& std::is_nothrow_move_assignable_v<std::vector<value_type>>) = default;
 	
 		/*
 		std::vector<value_type>& operator*() noexcept { return elements; }
@@ -197,17 +222,36 @@ public:
 	
 	insert_order_map() noexcept(noexcept(b_storage()) && noexcept(e_storage()))
 		: mh(), me() {}
-	explicit insert_order_map(size_type bucket_count, const H& h = H(), const E& e = E())
+	insert_order_map(const H& h, const E& e)
+		noexcept(noexcept(b_storage(h)) && noexcept(e_storage(e)))
+		: mh(h), me(e) {}
+	explicit insert_order_map(size_type bucket_count) : mh(bucket_count), me() {}
+	explicit insert_order_map(size_type bucket_count, const H& h, const E& e)
 		: mh(h, bucket_count), me(e) {}
+	insert_order_map(std::initializer_list<value_type> ilist) : mh(), me(ilist)
+	{ rehash(); }
+	insert_order_map(std::initializer_list<value_type> ilist, const H& h, const E& e)
+		: mh(h), me(e, ilist) { rehash(); }
 	
-	insert_order_map(const insert_order_map& oth) : mh(oth.mh), me(oth.me) {}
+	template <typename InputIt>
+	insert_order_map(InputIt first, InputIt last)
+		: mh(), me(first, last) { rehash(); }
+	template <typename InputIt>
+	insert_order_map(InputIt first, InputIt last, const H& h, const E& e)
+		: mh(h), me(e, first, last) { rehash(); }
+	
+	insert_order_map(const insert_order_map& oth) = default;
 	insert_order_map(insert_order_map&& oth)
-		noexcept(std::is_nothrow_move_constructible_v<b_storage> && std::is_nothrow_move_constructible_v<e_storage>)
-		: mh(std::move(oth.mh)), me(std::move(oth.me)) {}
+		noexcept(std::is_nothrow_move_constructible_v<b_storage>
+		&& std::is_nothrow_move_constructible_v<e_storage>) = default;
+		
 	
 	template<typename HOTH>
 	insert_order_map(const insert_order_map<K, V, HOTH, E>& oth)
 		: mh(oth.mh.bucket_count), me(oth.me) { rehash(); }
+	template<typename HOTH>
+	insert_order_map(const insert_order_map<K, V, HOTH, E>& oth, const H& h)
+		: mh(h, oth.mh.bucket_count), me(oth.me) { rehash(); }
 	template<typename HOTH>
 	insert_order_map(insert_order_map<K, V, HOTH, E>&& oth) : mh(), me(std::move(oth.me))
 	{
@@ -217,18 +261,21 @@ public:
 		oth.mh.bucket_count = 0;
 		rehash();
 	}
-	
-	insert_order_map(std::initializer_list<value_type> ilist, const H& h = H(), const E& e = E())
-		: mh(h), me(e, ilist) { rehash(); }
-	template <typename InputIt>
-	insert_order_map(InputIt first, InputIt last, const H& h = H(), const E& e = E())
-		: mh(h), me(e, first, last) { rehash(); }
-		
-	insert_order_map& operator=(insert_order_map oth)
+	template<typename HOTH>
+	insert_order_map(insert_order_map<K, V, HOTH, E>&& oth, const H& h)
+	: mh(h), me(std::move(oth.me))
 	{
-		swap(oth);
-		return *this;
+		mh.buckets = oth.mh.buckets;
+		mh.bucket_count = oth.mh.bucket_count;
+		oth.mh.buckets = nullptr;
+		oth.mh.bucket_count = 0;
+		rehash();
 	}
+		
+	insert_order_map& operator=(const insert_order_map& oth) = default;
+	insert_order_map& operator=(insert_order_map&& oth)
+		noexcept(std::is_nothrow_move_assignable_v<b_storage>
+		&& std::is_nothrow_move_assignable_v<e_storage>) = default;
 	
 	insert_order_map& operator=(std::initializer_list<value_type> ilist)
 	{
@@ -521,9 +568,8 @@ public:
 		return acc;
 	}
 	
-	void swap(insert_order_map& oth) noexcept(std::is_nothrow_swappable_v<H>
-		&& std::is_nothrow_swappable_v<E>
-		&& std::is_nothrow_swappable_v<std::vector<value_type>>)
+	void swap(insert_order_map& oth) noexcept(noexcept(b_storage::swap(oth.mh))
+		&& noexcept(e_storage::swap(oth.me)))
 	{
 		mh.swap(oth.mh);
 		me.swap(oth.me);
