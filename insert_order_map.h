@@ -41,7 +41,7 @@ private:
 		b_storage(const H& h, size_type bucket_count)
 			: H(h), buckets(new bucket_type[bucket_count]()), bucket_count(bucket_count) {}
 		b_storage(const b_storage& oth)
-			: H(oth), buckets(new bucket_type[oth.bucket_count]()), bucket_count(oth.bucket_count)
+			: H(oth), buckets(new bucket_type[oth.bucket_count]), bucket_count(oth.bucket_count)
 		{
 			std::copy(oth.cbegin(), oth.cend(), begin());
 		}
@@ -53,17 +53,7 @@ private:
 		}
 		~b_storage() { delete[] buckets; }
 		
-		b_storage& operator=(const b_storage& oth)
-		{
-			if(this != &oth)
-			{
-				H::operator=(oth);
-				resize(oth.bucket_count);
-				clear();
-				std::copy(oth.cbegin(), oth.cend(), begin());
-			}
-			return *this;
-		}
+		b_storage& operator=(const b_storage& oth) = delete;
 		
 		b_storage& operator=(b_storage&& oth) noexcept(std::is_nothrow_move_assignable_v<H>)
 		{
@@ -122,7 +112,7 @@ private:
 			{
 				if(s == 0)
 				{
-					s=++i;
+					s=i+1;
 					return true;
 				}
 			}
@@ -155,12 +145,10 @@ private:
 		
 		e_storage& operator=(const e_storage& oth)
 		{
-			if(this != &oth)
-			{
-				E::operator=(oth);
-				std::vector<value_type> tmp(oth.v);
-				v.swap(tmp);
-			}
+			
+			E::operator=(oth);
+			std::vector<value_type> tmp(oth.v);
+			v.swap(tmp);
 			return *this;
 		}
 		e_storage& operator=(e_storage&& oth) noexcept(std::is_nothrow_move_assignable_v<E>
@@ -195,12 +183,16 @@ private:
 		{
 			mh.clear();
 		}
-		for(size_type i = 0; i < me->size(); i++)
+		size_type i = 0;
+		while(i < me->size())
 		{
 			if(!mh.insert(bucket(me.v[i].first), i))
 			{
 				mh.realloc(mh.bucket_count + (mh.bucket_count>>1));
 				i = 0;
+			}else
+			{
+				i++;
 			}
 		}
 	}
@@ -216,7 +208,7 @@ private:
 				{
 					if(me(me.v[idx-1].first, k))
 					{
-						return {std::next(me->begin(), idx-1), b};
+						return {me->begin() + (idx-1), b};
 					}
 				}
 			}
@@ -281,7 +273,16 @@ public:
 		rehash();
 	}
 		
-	insert_order_map& operator=(const insert_order_map& oth) = default;
+	insert_order_map& operator=(const insert_order_map& oth)
+	{
+		if(this != &oth)
+		{
+			static_cast<H&>(mh) = oth.mh;
+			me = oth.me;
+			rehash();
+		}
+		return *this;
+	}
 	insert_order_map& operator=(insert_order_map&& oth)
 		noexcept(std::is_nothrow_move_assignable_v<b_storage>
 		&& std::is_nothrow_move_assignable_v<e_storage>) = default;
@@ -316,7 +317,7 @@ public:
 		if(it == me->end())
 		{
 			me->push_back(val);
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -330,7 +331,7 @@ public:
 		if(it == me->end())
 		{
 			me->push_back(std::move(val));
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -345,7 +346,7 @@ public:
 		if(it == me->end())
 		{
 			me->emplace_back(key, std::forward<Args>(args)...);
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -360,7 +361,7 @@ public:
 		if(it == me->end())
 		{
 			me->emplace_back(std::move(key), std::forward<Args>(args)...);
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else
 		{
@@ -375,7 +376,7 @@ public:
 		auto [it, b] = lookup(me->back().first);
 		if(it == me->end())
 		{
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(it), true};
 		}else
 		{
@@ -427,10 +428,10 @@ public:
 	std::pair<iterator, bool> insert_or_assign(const K& k, M&& obj)
 	{
 		auto [it, b] = lookup(k);
-		if(k == me->end())
+		if(it == me->end())
 		{
 			me->emplace_back(k, std::forward<M>(obj));
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
@@ -442,10 +443,10 @@ public:
 	std::pair<iterator, bool> insert_or_assign(K&& k, M&& obj)
 	{
 		auto [it, b] = lookup(k);
-		if(k == me->end())
+		if(it == me->end())
 		{
 			me->emplace_back(std::move(k), std::forward<M>(obj));
-			if(!mh.insert(b, me->size())) rehash();
+			if(!mh.insert(b, me->size()-1)) rehash();
 			return {std::prev(me->end()), true};
 		}else{
 			it->second = std::forward<M>(obj);
@@ -457,11 +458,11 @@ public:
 	std::pair<iterator, bool> insert_or_assign(const_iterator pos, const K& k, M&& obj)
 	{
 		auto [it, b] = lookup(k);
-		if(k == me->end())
+		if(it == me->end())
 		{
-			me->emplace(pos, k, std::forward<M>(obj));
-			if(!mh.insert(b, me->size())) rehash();
-			return {std::prev(me->end()), true};
+			it = me->emplace(pos, k, std::forward<M>(obj));
+			rehash();
+			return {it, true};
 		}else{
 			it->second = std::forward<M>(obj);
 			return {it, false};
@@ -474,9 +475,9 @@ public:
 		auto [it, b] = lookup(k);
 		if(k == me->end())
 		{
-			me->emplace(pos, std::move(k), std::forward<M>(obj));
-			if(!mh.insert(b, me->size())) rehash();
-			return {std::prev(me->end()), true};
+			it = me->emplace(pos, std::move(k), std::forward<M>(obj));
+			rehash();
+			return {it, true};
 		}else{
 			it->second = std::forward<M>(obj);
 			return {it, false};
@@ -515,10 +516,10 @@ public:
 	}
 	
 	template <typename... Args>
-	std::pair<iterator, bool> emplace(size_t idx, Args... args)
+	std::pair<iterator, bool> emplace(size_type idx, Args... args)
 	{
 		if(idx > me->size()) return {me->end(), false};
-		return emplace(std::next(me->begin(), idx), args...);
+		return emplace(me->begin() + idx, args...);
 	}
 	
 	iterator erase(iterator pos)
@@ -620,12 +621,12 @@ public:
 	
 	V& operator[](const K& k)
 	{
-		auto [it, b] = find(k);
+		auto [it, b] = lookup(k);
 		if(it == me->end())
 		{
 			me->emplace_back(k, V());
-			if(!mh.insert(b, me->size())) rehash();
-			return me->back().second();
+			if(!mh.insert(b, me->size()-1)) rehash();
+			return me->back().second;
 		}else
 		{
 			return it->second;
@@ -634,12 +635,12 @@ public:
 	
 	V& operator[](K&& k)
 	{
-		auto [it, b] = find(k);
+		auto [it, b] = lookup(k);
 		if(it == me->end())
 		{
 			me->emplace_back(std::move(k), V());
-			if(!mh.insert(b, me->size())) rehash();
-			return me->back().second();
+			if(!mh.insert(b, me->size()-1)) rehash();
+			return me->back().second;
 		}else
 		{
 			return it->second;
@@ -661,7 +662,7 @@ public:
 			{
 				if(me(me.v[idx-1].first, k))
 				{
-					return std::next(me->begin(), idx-1);
+					return me->begin() + (idx-1);
 				}
 			}
 		}
@@ -676,7 +677,7 @@ public:
 			{
 				if(me(me.v[idx-1].first, k))
 				{
-					return std::next(me->cbegin(), idx-1);
+					return me->cbegin() + (idx-1);
 				}
 			}
 		}
