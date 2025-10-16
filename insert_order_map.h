@@ -153,7 +153,16 @@ private:
 		e_storage(e_storage&& oth) noexcept(std::is_nothrow_move_constructible_v<E>
 			&& std::is_nothrow_move_constructible_v<std::vector<value_type>>) = default;
 		
-		e_storage& operator=(const e_storage& oth) = default;
+		e_storage& operator=(const e_storage& oth)
+		{
+			if(this != &oth)
+			{
+				E::operator=(oth);
+				std::vector<value_type> tmp(oth.v);
+				v.swap(tmp);
+			}
+			return *this;
+		}
 		e_storage& operator=(e_storage&& oth) noexcept(std::is_nothrow_move_assignable_v<E>
 			&& std::is_nothrow_move_assignable_v<std::vector<value_type>>) = default;
 	
